@@ -1,0 +1,72 @@
+# ---------------------------------------------------------------
+# SECRETOS - nada de esto entra al repo, nunca
+# ---------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.ppk
+credentials
+.aws/
+
+# ---------------------------------------------------------------
+# TERRAFORM
+# El tfstate guarda contrasenas EN TEXTO PLANO. Jamas commitearlo.
+# El .terraform.lock.hcl SI se commitea (fija versiones de providers).
+# ---------------------------------------------------------------
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+tfplan
+*.tfplan
+
+# terraform.tfvars SI se commitea, pero solo con config (cidr, tamanos, flags).
+# Los secretos van por TF_VAR_xxx o Secrets Manager.
+*.auto.tfvars
+secrets.tfvars
+
+# ---------------------------------------------------------------
+# DATOS - solo datos generados. Ningun dump de la base real.
+# ---------------------------------------------------------------
+*.dump
+*.sql.gz
+dumps/
+data/real/
+
+# ---------------------------------------------------------------
+# NODE
+# ---------------------------------------------------------------
+node_modules/
+dist/
+build/
+.next/
+.vercel/
+npm-debug.log*
+yarn-error.log*
+
+# ---------------------------------------------------------------
+# PYTHON
+# ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# ---------------------------------------------------------------
+# SO / EDITOR
+# ---------------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.swp
