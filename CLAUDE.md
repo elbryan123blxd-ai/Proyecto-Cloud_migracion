@@ -83,9 +83,39 @@ Los tres gastos que funden creditos sin avisar:
 | Load Balancer | ~$17/mes | Uno solo para todos los servicios |
 | Base encendida 24/7 | ~$13-43/mes | Aurora Serverless v2 escala a 0 |
 
-Objetivo: **$35-50/mes con todo arriba**, cerca de $0 con el entorno apagado.
+Objetivo: **$35-50/mes con todo arriba**, cerca de $0 con el entorno apagado. Ese numero
+es el costo del CLON de portfolio (datos de prueba, casi sin trafico real). Ver abajo el
+costo estimado si esto sirviera de verdad a Academia Premier.
 
 Pendiente de armar: AWS Budget con alerta a $50 y a $100 (Fase 0).
+
+## Capacidad objetivo (si esto fuera produccion real, no el clon)
+
+Decidido 2026-10-13, para que las decisiones de auto-scaling tengan un numero de
+referencia en vez de ser arbitrarias:
+
+- **60 administradores/directores/tutores**, conectados de forma mas o menos pareja
+  de 8am a 8pm, todos los dias.
+- **20,000 alumnos**, con dos patrones de pico **predecibles**, no aleatorios:
+  - Pico diario: la gran mayoria entra entre **7:45am y 8:00am** (marcar asistencia
+    por QR).
+  - Pico extra: mismo volumen, 4 veces al mes, a la tarde.
+- Fuera de esas ventanas, trafico bajo y disperso.
+
+**Por que importa:** este patron (actividad casi constante 12 horas + picos masivos
+pero anticipables) es la razon por la que GoTrue/PostgREST van en Fargate con
+auto-scaling y no en Lambda — con Lambda, el pico de las 7:45am dispara un "cold
+start storm" (cientos de instancias arrancando en frio a la vez, justo cuando 20k
+personas estan parados esperando que el QR responda). Evitarlo con Provisioned
+Concurrency programada termina costando lo mismo que Fargate, asi que no hay
+ahorro real — Fargate 24/7 + auto-scaling en las ventanas de pico es la opcion mas
+simple y pareja en costo.
+
+**Pendiente real, no solo de papel:** el numero exacto de tareas de Fargate que hacen
+falta para aguantar 20k requests en ~15 minutos no se puede calcular solo en teoria —
+hace falta una prueba de carga real contra el sistema antes de llamarlo "listo para
+producción". No es parte del alcance de este clon (que no tiene trafico real), pero
+queda anotado como el paso que faltaria si esto alguna vez dejara de ser portfolio.
 
 ## Fases
 
