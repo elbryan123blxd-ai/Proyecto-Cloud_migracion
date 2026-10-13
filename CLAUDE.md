@@ -98,10 +98,32 @@ Ver `docs/PLAN.md` para el detalle completo con checkboxes. Resumen:
 4. CI/CD (GitHub Actions con OIDC, restringido a este repo y a `main`)
 5. Cierre (observabilidad, README final, video, destroy)
 
+## El schema (`db/schema.sql`)
+
+Extraido via MCP de la Supabase real de Academia Premier -- solo estructura (columnas,
+FKs, funciones, RLS), cero filas de dato real. Alcance decidido 2026-10-12:
+
+- **Tutor, Alumno y Profesor funcionan al 100%.**
+- **Dashboard (director) funciona salvo** facturacion SUNAT, gastos y cierres de caja.
+- **El panel del dueno de la plataforma queda afuera a proposito** (suscripciones, modo
+  soporte, roles de plataforma) -- es el backoffice de venta del SaaS, no la arquitectura
+  cloud que este repo viene a demostrar.
+- `answer_sheets`/`ocr_results` (el pipeline de OCR que lee las hojas de examen escaneadas)
+  tampoco se portan: es vision por computadora, no infraestructura. `exam_results` guarda
+  los puntajes ya calculados, como dato generado.
+
+25 tablas, 21 funciones de permisos (`mi_academia()`, `is_director()`, `mi_alumno()`,
+`mi_tutor()`, etc.), RLS completa. Tres funciones se simplificaron a proposito frente a
+produccion porque dependian del backoffice de plataforma excluido: `mi_academia()` ya no
+pasa por modo soporte, `academia_activa()` siempre da `true`, `es_plataforma()` siempre
+da `false`.
+
 ## Estado actual / pendientes abiertos
 
-- [ ] Confirmar que el usuario IAM tiene MFA activo
+- [x] MFA activo en el usuario IAM
+- [x] Schema SQL (`db/schema.sql`)
 - [ ] AWS Budget con alerta
 - [ ] Borrar el bucket S3 que se creo a mano por consola durante las pruebas
+- [ ] Generador de datos falsos para las 25 tablas
 - [ ] Decidir y documentar el backend remoto de Terraform (S3 + DynamoDB) antes del primer
       `apply` real, para no dejar el `tfstate` en local
