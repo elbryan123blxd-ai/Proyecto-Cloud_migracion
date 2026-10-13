@@ -85,6 +85,17 @@ Objetivo: **$35-50/mes** con todo arriba, y casi $0 con el entorno apagado.
 
 ### Fase 5 - Cierre
 - [ ] CloudWatch: dashboard y alarmas
+- [ ] **Prueba de carga real — "el clip epico" del video.** Simular el escenario
+      documentado en CLAUDE.md (60 admins + 30k alumnos en 3 oleadas: 20% a las
+      7:30, 30% a las 7:40, 50% de 7:45 en adelante). Grabar el dashboard de
+      CloudWatch mostrando el auto-scaling de Fargate reaccionando en vivo, no
+      solo contarlo. Generar la carga desde dentro de AWS (EC2/Fargate en la
+      misma region), no desde la laptop — si no, el cuello de botella es la
+      laptop, no la arquitectura. Herramienta candidata: k6 (tiene dashboard
+      propio, queda bien en video) o Artillery.
+      **Requiere Fases 1-4 ya desplegadas** — no se puede probar contra algo
+      que no existe. Cuidado con el costo: el auto-scaling real gasta creditos
+      de verdad durante la prueba.
 - [ ] README con diagrama de arquitectura y costos
 - [ ] Video
 - [ ] `terraform destroy` y verificar que no quedo nada cobrando
