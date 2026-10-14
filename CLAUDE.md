@@ -206,6 +206,26 @@ apuntando a esto.
       la nota habia quedado desactualizada
 - [x] Generador de datos falsos (`scripts/seed/generar_datos.py`) -- falta
       correrlo de verdad, necesita Aurora + GoTrue desplegados (Fases 1-2)
-- [ ] Fase 1: VPC, Aurora Serverless v2, Secrets Manager -- **siguiente paso real, Fase 0 completa**
+- [x] Fase 1 escrita (`terraform/red-y-base/`), validada con `terraform validate`
+- [ ] `terraform apply` de Fase 1 -- **siguiente paso real**, necesita sesion MFA (Bryan)
 - [ ] Prueba de carga real (60 admins + 30k alumnos en 3 oleadas) -- ver Fase 5 en
       `docs/PLAN.md`, requiere Fases 1-4 completas primero
+
+## El modulo de Fase 1 (`terraform/red-y-base/`)
+
+Backend `s3` apuntando al bootstrap. Crea:
+
+- **VPC** (`10.0.0.0/16`) con 2 subredes publicas (el ALB, Fase 2) y 2 privadas
+  (GoTrue, PostgREST, Aurora, VPC Endpoints), una por AZ.
+- **Sin NAT Gateway** -- la subred privada solo sale por VPC Endpoints: `s3`
+  (Gateway, gratis), `ecr.api`/`ecr.dkr`/`secretsmanager`/`logs` (Interface,
+  ~$7/mes cada uno). Ver CLAUDE.md "Presupuesto" para el razonamiento completo.
+- **Security groups** en cadena: Internet -> `sg-alb` -> `sg-servicios` ->
+  `sg-aurora`/`sg-vpc-endpoints`. Nada se salta un escalon.
+- **Aurora Serverless v2** Postgres 15.4, `min_capacity = 0` (se pausa sola),
+  `max_capacity = 1` (el clon no tiene trafico real que justifique mas).
+- **Secrets Manager**: usuario/password/host/puerto de Aurora, generados por
+  Terraform (`random_password`), nunca escritos a mano.
+
+Pendiente, en ese orden: `terraform apply` (Bryan, MFA) -> cargar
+`db/schema.sql` contra Aurora -> correr `scripts/seed/generar_datos.py`.

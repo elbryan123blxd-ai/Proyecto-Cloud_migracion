@@ -69,10 +69,11 @@ Objetivo: **$35-50/mes** con todo arriba, y casi $0 con el entorno apagado.
       (requiere Aurora + GoTrue desplegados, Fases 1-2)
 
 ### Fase 1 - Red y base
-- [ ] VPC, subredes, security groups (sin NAT Gateway)
-- [ ] Aurora Serverless v2 Postgres, minimo 0 ACU
-- [ ] Secrets Manager para las credenciales
-- [ ] Cargar esquema + datos generados
+- [x] Codigo escrito (`terraform/red-y-base/`): VPC, subredes publicas/privadas,
+      security groups, VPC Endpoints (S3, ECR, Secrets Manager, CloudWatch Logs),
+      Aurora Serverless v2 (min 0 ACU), Secrets Manager. Validado con
+      `terraform validate` -- falta correr `terraform apply` (Bryan, con MFA)
+- [ ] Cargar esquema + datos generados (requiere que Aurora exista)
 
 ### Fase 2 - El Supabase propio
 - [ ] Cluster ECS Fargate
