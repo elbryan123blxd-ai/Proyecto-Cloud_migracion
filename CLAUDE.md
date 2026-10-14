@@ -120,6 +120,23 @@ hace falta una prueba de carga real contra el sistema antes de llamarlo "listo p
 producción". No es parte del alcance de este clon (que no tiene trafico real), pero
 queda anotado como el paso que faltaria si esto alguna vez dejara de ser portfolio.
 
+## Descuentos por compromiso (Savings Plans) -- documentado 2026-10-14
+
+Solo **Fargate** califica para Compute Savings Plans (1-3 anios, ~20-50% de descuento
+segun termino y pago adelantado). Aurora Serverless v2 **no** califica -- las Reserved
+Instances de Aurora/RDS son solo para "Provisioned", no para Serverless v2. Es el
+trade-off de haber elegido elasticidad (escala a 0) sobre poder comprometerse a un
+precio fijo. ALB, Lambda, CloudFront y S3 tampoco tienen este mecanismo o no conviene
+aplicarlo con trafico esporadico.
+
+Para el CLON (este repo): **ningun compromiso conviene** -- el proyecto se destruye
+con `terraform destroy`, comprometerse a 1-3 anios de gasto fijo pierde plata en vez
+de ahorrarla. Para el escenario de produccion real (ver capacidad objetivo arriba),
+un Savings Plan de 1 anio bajaria el total estimado de ~$110-150 a ~$99-136/mes;
+3 anios todo adelantado, a ~$90-125/mes -- solo la porcion de Fargate cambia.
+
+Reporte visual completo (para el video): [Costos Academia Premier](https://claude.ai/artifact/TpXWXUL6SATLWzdzPtUU7N)
+
 ## Fases
 
 Ver `docs/PLAN.md` para el detalle completo con checkboxes. Resumen:
