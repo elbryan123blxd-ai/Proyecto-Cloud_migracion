@@ -202,9 +202,10 @@ apuntando a esto.
 - [x] Diagrama de arquitectura (`docs/arquitectura.drawio`)
 - [x] Bootstrap de Terraform aplicado (bucket + tabla DynamoDB creados)
 - [x] AWS Budget con alerta a $50 y $100
-- [ ] Borrar el bucket S3 que se creo a mano por consola durante las pruebas
+- [x] Borrar el bucket S3 de prueba -- confirmado 2026-10-14: no existia,
+      la nota habia quedado desactualizada
 - [x] Generador de datos falsos (`scripts/seed/generar_datos.py`) -- falta
       correrlo de verdad, necesita Aurora + GoTrue desplegados (Fases 1-2)
-- [ ] Fase 1: VPC, Aurora Serverless v2, Secrets Manager -- **siguiente paso real**
+- [ ] Fase 1: VPC, Aurora Serverless v2, Secrets Manager -- **siguiente paso real, Fase 0 completa**
 - [ ] Prueba de carga real (60 admins + 30k alumnos en 3 oleadas) -- ver Fase 5 en
       `docs/PLAN.md`, requiere Fases 1-4 completas primero

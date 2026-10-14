@@ -60,7 +60,9 @@ Objetivo: **$35-50/mes** con todo arriba, y casi $0 con el entorno apagado.
 - [x] `terraform apply` del bootstrap (`terraform/bootstrap/`) -- bucket
       `academia-premier-tfstate-994b4178` y tabla `academia-premier-tflock`
       creados en us-east-2, 2026-10-14
-- [ ] Borrar el bucket S3 que se creo a mano por consola durante las pruebas
+- [x] Borrar el bucket S3 que se creo a mano por consola durante las pruebas
+      -- confirmado 2026-10-14: no existe ningun otro bucket aparte del
+      del bootstrap. La nota quedo desactualizada, no habia nada que borrar
 - [x] Generador de datos falsos para las 25 tablas de db/schema.sql --
       `scripts/seed/generar_datos.py`. 5 academias, 30k alumnos, 60
       admins/directores/tutores repartidos. Falta correrlo de verdad
