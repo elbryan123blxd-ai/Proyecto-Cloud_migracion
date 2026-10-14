@@ -185,22 +185,25 @@ runtime" -- es tooling para construir la infraestructura, no parte de la app.
 
 ## El bootstrap de Terraform (`terraform/bootstrap/`)
 
-Ya escrito, **falta aplicarlo** (`terraform apply`, requiere sesion temporal con MFA).
-Backend `local` a proposito en este modulo unicamente -- no se puede guardar el estado
-del bucket que guarda el estado, adentro de ese mismo bucket, antes de que exista.
-Crea: un bucket S3 (versionado, cifrado AES256, acceso publico bloqueado) y una tabla
-DynamoDB `academia-premier-tflock` para el lock. El resto de los modulos (Fase 1 en
-adelante) van a usar backend `s3` apuntando a lo que esto cree.
+**Aplicado 2026-10-14.** Backend `local` a proposito en este modulo unicamente -- no
+se puede guardar el estado del bucket que guarda el estado, adentro de ese mismo
+bucket, antes de que exista (ese estado vive en el disco de Bryan, nunca en git).
+Creo: bucket S3 `academia-premier-tfstate-994b4178` (versionado, cifrado AES256,
+acceso publico bloqueado, vacio hasta que un modulo de Fase 1+ lo use como backend
+remoto) y tabla DynamoDB `academia-premier-tflock` (On-demand, vacia salvo durante
+un `apply` -- el lock se borra solo al terminar). Ambos confirmados en la consola,
+us-east-2. El resto de los modulos (Fase 1 en adelante) van a usar backend `s3`
+apuntando a esto.
 
 ## Estado actual / pendientes abiertos
 
 - [x] MFA activo en el usuario IAM
 - [x] Schema SQL (`db/schema.sql`)
 - [x] Diagrama de arquitectura (`docs/arquitectura.drawio`)
-- [x] Codigo del bootstrap de Terraform escrito (`terraform/bootstrap/`)
-- [ ] `terraform apply` del bootstrap -- **siguiente paso real**, necesita sesion MFA
-- [ ] AWS Budget con alerta
+- [x] Bootstrap de Terraform aplicado (bucket + tabla DynamoDB creados)
+- [x] AWS Budget con alerta a $50 y $100
 - [ ] Borrar el bucket S3 que se creo a mano por consola durante las pruebas
 - [ ] Generador de datos falsos para las 25 tablas
+- [ ] Fase 1: VPC, Aurora Serverless v2, Secrets Manager -- **siguiente paso real**
 - [ ] Prueba de carga real (60 admins + 30k alumnos en 3 oleadas) -- ver Fase 5 en
       `docs/PLAN.md`, requiere Fases 1-4 completas primero

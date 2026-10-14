@@ -48,7 +48,7 @@ Objetivo: **$35-50/mes** con todo arriba, y casi $0 con el entorno apagado.
 ## Fases
 
 ### Fase 0 - Fundaciones (sin costo)
-- [ ] AWS Budget con alerta a $50 y a $100
+- [x] AWS Budget con alerta a $50 y a $100
 - [x] Acceso a AWS sin claves permanentes en uso (IAM user + MFA + sesion
       temporal, no SSO -- la cuenta "Ready Set Build" no lo soporta)
 - [x] Confirmar en que cuenta AWS estan los creditos -- cuenta nueva
@@ -57,6 +57,9 @@ Objetivo: **$35-50/mes** con todo arriba, y casi $0 con el entorno apagado.
       `db/schema.sql`. 25 tablas, 21 funciones de permisos, RLS completa.
       Alcance decidido 2026-10-12: Tutor/Alumno/Profesor al 100%, Dashboard
       sin facturacion SUNAT/gastos/cierres de caja, panel de plataforma afuera
+- [x] `terraform apply` del bootstrap (`terraform/bootstrap/`) -- bucket
+      `academia-premier-tfstate-994b4178` y tabla `academia-premier-tflock`
+      creados en us-east-2, 2026-10-14
 - [ ] Borrar el bucket S3 que se creo a mano por consola durante las pruebas
 - [ ] Generador de datos falsos para las 25 tablas de db/schema.sql
 
