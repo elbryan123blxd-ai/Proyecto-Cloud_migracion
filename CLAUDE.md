@@ -96,9 +96,12 @@ referencia en vez de ser arbitrarias:
 
 - **60 administradores/directores/tutores**, conectados de forma mas o menos pareja
   de 8am a 8pm, todos los dias.
-- **20,000 alumnos**, con dos patrones de pico **predecibles**, no aleatorios:
-  - Pico diario: la gran mayoria entra entre **7:45am y 8:00am** (marcar asistencia
-    por QR).
+- **30,000 alumnos**, con dos patrones de pico **predecibles**, no aleatorios ni
+  simultaneos:
+  - Pico diario (marcar asistencia por QR), escalonado en 3 oleadas: **20% a las
+    7:30am, 30% a las 7:40am, 50% de 7:45am en adelante**. El escalonamiento ayuda:
+    le da tiempo al auto-scaling de Fargate a reaccionar antes de la oleada mas
+    grande, en vez de recibir los 30k de golpe en el mismo segundo.
   - Pico extra: mismo volumen, 4 veces al mes, a la tarde.
 - Fuera de esas ventanas, trafico bajo y disperso.
 
@@ -148,12 +151,39 @@ produccion porque dependian del backoffice de plataforma excluido: `mi_academia(
 pasa por modo soporte, `academia_activa()` siempre da `true`, `es_plataforma()` siempre
 da `false`.
 
+## El diagrama (`docs/arquitectura.drawio`)
+
+Version visual de la tabla de arquitectura de arriba, con el estilo de iconos oficial
+de AWS. Para verlo siempre actualizado sin pelearse con el autosave de draw.io
+pisando el pull local, abrir directo desde GitHub:
+
+```
+https://app.diagrams.net/?url=https://raw.githubusercontent.com/elbryan123blxd-ai/Proyecto-Cloud_migracion/main/docs/arquitectura.drawio
+```
+
+Estructura: capas ENTRADA -> FRONTEND -> SERVICIOS -> DATOS, con un sub-contenedor
+punteado para la VPC privada (GoTrue + PostgREST + Aurora), y el backend de Terraform
+(S3 + DynamoDB) en una caja aparte, marcado explicitamente como "no participa del
+runtime" -- es tooling para construir la infraestructura, no parte de la app.
+
+## El bootstrap de Terraform (`terraform/bootstrap/`)
+
+Ya escrito, **falta aplicarlo** (`terraform apply`, requiere sesion temporal con MFA).
+Backend `local` a proposito en este modulo unicamente -- no se puede guardar el estado
+del bucket que guarda el estado, adentro de ese mismo bucket, antes de que exista.
+Crea: un bucket S3 (versionado, cifrado AES256, acceso publico bloqueado) y una tabla
+DynamoDB `academia-premier-tflock` para el lock. El resto de los modulos (Fase 1 en
+adelante) van a usar backend `s3` apuntando a lo que esto cree.
+
 ## Estado actual / pendientes abiertos
 
 - [x] MFA activo en el usuario IAM
 - [x] Schema SQL (`db/schema.sql`)
+- [x] Diagrama de arquitectura (`docs/arquitectura.drawio`)
+- [x] Codigo del bootstrap de Terraform escrito (`terraform/bootstrap/`)
+- [ ] `terraform apply` del bootstrap -- **siguiente paso real**, necesita sesion MFA
 - [ ] AWS Budget con alerta
 - [ ] Borrar el bucket S3 que se creo a mano por consola durante las pruebas
 - [ ] Generador de datos falsos para las 25 tablas
-- [ ] Decidir y documentar el backend remoto de Terraform (S3 + DynamoDB) antes del primer
-      `apply` real, para no dejar el `tfstate` en local
+- [ ] Prueba de carga real (60 admins + 30k alumnos en 3 oleadas) -- ver Fase 5 en
+      `docs/PLAN.md`, requiere Fases 1-4 completas primero
