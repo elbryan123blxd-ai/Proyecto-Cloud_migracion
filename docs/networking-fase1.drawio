@@ -1,0 +1,143 @@
+<mxfile host="app.diagrams.net" modified="2026-10-14T00:00:00.000Z" agent="claude-code" version="24.0.0">
+  <diagram name="Networking - Fase 1" id="networking-fase1">
+    <mxGraphModel dx="1800" dy="1100" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1300" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="titulo" value="Academia Premier — Networking de Fase 1 (terraform/red-y-base)" style="text;html=1;fontSize=20;fontStyle=1;align=left;fontColor=#232F3E;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="900" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitulo" value="CIDRs, puertos, security groups y route tables — cada flecha dice quien le habla a quien, por que puerto" style="text;html=1;fontSize=12;fontColor=#5A6B7B;" vertex="1" parent="1">
+          <mxGeometry x="40" y="52" width="900" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ===================== INTERNET ===================== -->
+        <mxCell id="internet" value="Internet" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.internet_alt1;fillColor=#232F3E;strokeColor=none;html=1;verticalLabelPosition=bottom;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="750" y="90" width="48" height="48" as="geometry" />
+        </mxCell>
+
+        <!-- ===================== VPC ===================== -->
+        <mxCell id="vpc" value="VPC academia-premier-vpc · 10.0.0.0/16 · us-east-2" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;dashPattern=4 4;verticalAlign=top;align=left;spacingLeft=10;spacingTop=10;fontSize=13;fontStyle=1;fontColor=#248814;strokeColor=#248814;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="40" y="210" width="1620" height="920" as="geometry" />
+        </mxCell>
+
+        <mxCell id="igw" value="Internet Gateway" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.internet_gateway;fillColor=#8C4FFF;strokeColor=none;html=1;verticalLabelPosition=bottom;verticalAlign=top;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="750" y="230" width="48" height="48" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_internet_igw" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="internet" target="igw">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ===================== SUBRED PUBLICA ===================== -->
+        <mxCell id="sub_publica" value="Subred pública · 10.0.0.0/24 + 10.0.1.0/24 (x2 AZs: us-east-2a / us-east-2b)&#10;rt-publica: 0.0.0.0/0 → Internet Gateway" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E9F3E6;strokeColor=#248814;verticalAlign=top;align=left;spacingLeft=10;spacingTop=8;fontSize=11;fontColor=#248814;" vertex="1" parent="1">
+          <mxGeometry x="200" y="310" width="1300" height="170" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_igw_pub" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="igw" target="sub_publica">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="alb" value="ALB&#10;(Fase 2 — aún no existe)" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.application_load_balancer;fillColor=#8C4FFF;strokeColor=none;html=1;verticalLabelPosition=bottom;verticalAlign=top;fontSize=11;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="800" y="360" width="56" height="56" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sg_alb" value="sg-alb&#10;IN  443/tcp  ← 0.0.0.0/0&#10;OUT all      → 10.0.0.0/16" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=10;align=left;spacingLeft=6;" vertex="1" parent="1">
+          <mxGeometry x="900" y="355" width="230" height="56" as="geometry" />
+        </mxCell>
+
+        <!-- ===================== SUBRED PRIVADA ===================== -->
+        <mxCell id="sub_privada" value="Subred privada · 10.0.10.0/24 + 10.0.11.0/24 (x2 AZs) · SIN IP pública&#10;rt-privada: sin ruta a Internet. Solo local + ruta al VPC Endpoint de S3" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#E8F1FB;strokeColor=#147EBA;verticalAlign=top;align=left;spacingLeft=10;spacingTop=8;fontSize=11;fontColor=#147EBA;" vertex="1" parent="1">
+          <mxGeometry x="200" y="520" width="1300" height="560" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_alb_sub" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="alb" target="sub_privada">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_alb_sub_label" value="sg-alb → sg-servicios&#10;solo esto puede pasar" style="edgeLabel;html=1;fontSize=10;fontColor=#5A6B7B;align=center;" vertex="1" connectable="0" parent="e_alb_sub">
+          <mxGeometry x="-0.1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="gotrue" value="GoTrue&#10;(auth, Fase 2)" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.elastic_container_service;fillColor=#ED7100;strokeColor=none;html=1;verticalLabelPosition=bottom;verticalAlign=top;fontSize=11;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="260" y="570" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="postgrest" value="PostgREST&#10;(API, Fase 2)" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.elastic_container_service;fillColor=#ED7100;strokeColor=none;html=1;verticalLabelPosition=bottom;verticalAlign=top;fontSize=11;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="420" y="570" width="52" height="52" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sg_servicios" value="sg-servicios&#10;IN  all/tcp   ← sg-alb&#10;OUT all        → 10.0.0.0/16" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=10;align=left;spacingLeft=6;" vertex="1" parent="1">
+          <mxGeometry x="560" y="575" width="230" height="56" as="geometry" />
+        </mxCell>
+
+        <mxCell id="aurora" value="Aurora Serverless v2&#10;Postgres 15.4 · 0→1 ACU" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.aurora;fillColor=#527FFF;strokeColor=none;html=1;verticalLabelPosition=bottom;verticalAlign=top;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="260" y="690" width="56" height="56" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_gotrue_aurora" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="gotrue" target="aurora">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_postgrest_aurora" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="postgrest" target="aurora">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sg_aurora" value="sg-aurora&#10;IN  5432/tcp ← sg-servicios&#10;(nada mas le habla a Aurora)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=10;align=left;spacingLeft=6;" vertex="1" parent="1">
+          <mxGeometry x="370" y="705" width="230" height="56" as="geometry" />
+        </mxCell>
+
+        <!-- ===================== VPC ENDPOINTS ===================== -->
+        <mxCell id="vpce_box" value="VPC Endpoints — reemplazan al NAT Gateway" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F3EEFC;strokeColor=#8C4FFF;verticalAlign=top;align=left;spacingLeft=8;spacingTop=6;fontSize=11;fontStyle=1;fontColor=#8C4FFF;" vertex="1" parent="1">
+          <mxGeometry x="260" y="820" width="900" height="210" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sg_vpce" value="sg-vpc-endpoints&#10;IN  443/tcp  ← sg-servicios" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=10;align=left;spacingLeft=6;" vertex="1" parent="1">
+          <mxGeometry x="900" y="690" width="230" height="48" as="geometry" />
+        </mxCell>
+
+        <mxCell id="vpce_s3" value="S3&#10;Gateway · gratis&#10;sin puerto (via route table)" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.s3;fillColor=#7AA116;strokeColor=none;html=1;verticalLabelPosition=bottom;verticalAlign=top;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="300" y="870" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="vpce_ecr_api" value="ECR API&#10;Interface · 443/tcp&#10;~$7/mes" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ecr;fillColor=#ED7100;strokeColor=none;html=1;verticalLabelPosition=bottom;verticalAlign=top;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="460" y="870" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="vpce_ecr_dkr" value="ECR DKR&#10;Interface · 443/tcp&#10;~$7/mes" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ecr;fillColor=#ED7100;strokeColor=none;html=1;verticalLabelPosition=bottom;verticalAlign=top;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="620" y="870" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="vpce_secrets" value="Secrets Manager&#10;Interface · 443/tcp&#10;~$7/mes" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.secrets_manager;fillColor=#DD344C;strokeColor=none;html=1;verticalLabelPosition=bottom;verticalAlign=top;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="780" y="870" width="52" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="vpce_logs" value="CloudWatch Logs&#10;Interface · 443/tcp&#10;~$7/mes" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.cloudwatch;fillColor=#E7157B;strokeColor=none;html=1;verticalLabelPosition=bottom;verticalAlign=top;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="950" y="870" width="52" height="52" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_gotrue_vpce" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="gotrue" target="vpce_box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ===================== SIN RUTA A INTERNET ===================== -->
+        <mxCell id="no_nat" value="⊘ 0 rutas a Internet&#10;(no hay NAT Gateway)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FADBD8;strokeColor=#C0392B;fontSize=11;fontStyle=1;fontColor=#C0392B;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1250" y="560" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ===================== TABLA: SECURITY GROUPS ===================== -->
+        <mxCell id="tabla_sg_titulo" value="Security groups — origen, destino y puerto" style="text;html=1;fontSize=14;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1130" width="500" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tabla_sg" value="sg-alb            IN  443/tcp    ← 0.0.0.0/0 (Internet)&#10;sg-servicios      IN  todo/tcp  ← sg-alb&#10;sg-aurora         IN  5432/tcp  ← sg-servicios&#10;sg-vpc-endpoints  IN  443/tcp    ← sg-servicios&#10;&#10;Nadie se salta un escalon: Internet nunca le habla directo a Aurora ni a los VPC Endpoints." style="text;html=1;fontSize=11;fontFamily=Courier New;align=left;verticalAlign=top;fillColor=#F5F5F5;strokeColor=#CCCCCC;rounded=0;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1160" width="620" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- ===================== TABLA: ROUTE TABLES ===================== -->
+        <mxCell id="tabla_rt_titulo" value="Route tables" style="text;html=1;fontSize=14;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1130" width="500" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="tabla_rt" value="rt-publica  (subredes publicas)&#10;  0.0.0.0/0   → Internet Gateway&#10;  10.0.0.0/16 → local (implicita)&#10;&#10;rt-privada  (subredes privadas)&#10;  10.0.0.0/16 → local (implicita)&#10;  (S3)        → VPC Endpoint Gateway&#10;  -- SIN ruta 0.0.0.0/0: no hay NAT Gateway --" style="text;html=1;fontSize=11;fontFamily=Courier New;align=left;verticalAlign=top;fillColor=#F5F5F5;strokeColor=#CCCCCC;rounded=0;spacing=8;" vertex="1" parent="1">
+          <mxGeometry x="700" y="1160" width="500" height="130" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
