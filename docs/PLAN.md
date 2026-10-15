@@ -43,7 +43,8 @@ Los tres que funden la cuenta sin avisar:
 | Load Balancer | ~$17/mes | Uno solo para todos los servicios |
 | Base encendida 24/7 | ~$13-43/mes | RDS no escala a 0 (no es Aurora) -- se usa la instancia mas chica posible para compensar |
 
-Objetivo: **$35-50/mes** con todo arriba, y casi $0 con el entorno apagado.
+Objetivo: **$48-60/mes** con todo arriba (subio desde $35-50 porque RDS no se puede
+pausar como Aurora Serverless v2), y casi $0 con el entorno apagado salvo por la base.
 
 ## Fases
 

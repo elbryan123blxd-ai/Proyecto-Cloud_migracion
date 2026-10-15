@@ -26,10 +26,7 @@ Password de prueba para **todos** los usuarios generados: `Demo1234!`
 
 ## Cuándo correrlo
 
-Requiere que Aurora ya exista (Fase 1) y que GoTrue haya corrido sus
-migraciones en `auth` (Fase 2) -- el script inserta directo en
-`auth.users` con las columnas estándar de GoTrue, pero conviene
+La base (RDS PostgreSQL) ya existe desde Fase 1 (aplicada 2026-10-15) -- falta que
+GoTrue corra sus migraciones en `auth` (Fase 2) antes de poder correr este script:
+inserta directo en `auth.users` con las columnas estándar de GoTrue, pero conviene
 confirmarlas contra el schema real una vez GoTrue esté desplegado.
-
-No es parte del alcance de Fase 0 ejecutarlo contra una base real
-(Aurora todavía no existe) -- acá solo queda el generador listo.

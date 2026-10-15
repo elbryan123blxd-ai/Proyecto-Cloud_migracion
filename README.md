@@ -10,7 +10,7 @@ credencial permanente.
 > Produccion sigue en Supabase y Vercel. Esto es una replica con datos generados.
 > Ningun dato real de alumnos entra a esta infraestructura.
 
-**Estado:** Fase 0 en curso. Ver [docs/PLAN.md](docs/PLAN.md).
+**Estado:** Fase 1 aplicada (VPC, RDS PostgreSQL, Secrets Manager). Ver [docs/PLAN.md](docs/PLAN.md).
 
 ## Arquitectura
 
@@ -35,8 +35,8 @@ Version con iconos de AWS, siempre actualizada: [abrir el diagrama](https://app.
                               |                                         |
                               +------------------+----------------------+
                                                   |
-                                        [ Aurora Serverless v2 ]
-                                         Postgres, escala a 0
+                                        [ RDS PostgreSQL ]
+                                      Postgres 15.19, db.t4g.micro
                                                   |
                                         [ Secrets Manager ]
 
@@ -48,7 +48,7 @@ Version con iconos de AWS, siempre actualizada: [abrir el diagrama](https://app.
 
 | En Supabase | En AWS |
 |---|---|
-| Postgres | Aurora Serverless v2 |
+| Postgres | RDS PostgreSQL (`db.t4g.micro`) -- el plan original era Aurora Serverless v2, cambiado por restriccion del free tier |
 | Auth | GoTrue en ECS Fargate |
 | API autogenerada | PostgREST en ECS Fargate |
 | Storage | S3 |
@@ -100,12 +100,15 @@ marcando asistencia por QR en 3 oleadas predecibles (20% a las 7:30am, 30% a las
 
 | Escenario | Costo estimado/mes |
 |---|---|
-| Este clon (datos de prueba, sin trafico real) | **$35-50** |
-| Si sirviera de verdad a Academia Premier, con el trafico de arriba | **~$110-150** |
+| Este clon (datos de prueba, sin trafico real) | **$48-60** |
+| Si sirviera de verdad a Academia Premier, con el trafico de arriba | **~$120-170** |
 
-En el segundo escenario, Fargate y el ALB son los unicos dos servicios que no bajan de
-precio aunque no haya trafico -- Aurora, en cambio, se mantiene barato porque solo escala
-hacia arriba durante los minutos exactos del pico.
+En el segundo escenario, Fargate, el ALB y ahora tambien la base de datos son los que no
+bajan de precio aunque no haya trafico. El plan original era Aurora Serverless v2 (escala
+sola en el pico y baja despues), pero la cuenta de creditos no permite usarla con una VPC
+propia -- con RDS normal se perdio esa elasticidad, asi que la base pasa a ser un gasto
+fijo mas, dimensionado para el peor momento del dia. Ver el reporte completo de costos
+y el detalle de la decision en [CLAUDE.md](CLAUDE.md).
 
 ## Como levantarlo
 

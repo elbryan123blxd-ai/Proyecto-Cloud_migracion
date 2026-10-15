@@ -95,11 +95,11 @@ Los tres gastos que funden creditos sin avisar:
 |---|---|---|
 | NAT Gateway | ~$32/mes | No se usa. VPC Endpoints o subredes publicas con security groups cerrados |
 | Load Balancer | ~$17/mes | Uno solo para todos los servicios |
-| Base encendida 24/7 | ~$13-43/mes | Antes: Aurora Serverless v2 escala a 0. Ahora (ver mas abajo): RDS normal no puede escalar a 0, asi que se usa la instancia mas chica posible (`db.t4g.micro`) para mantener el costo igual de bajo |
+| Base encendida 24/7 | ~$13-43/mes | Antes: Aurora Serverless v2 escala a 0. Ahora: RDS normal no puede escalar a 0 -- se usa la instancia mas chica posible (`db.t4g.micro`, ~$12-16/mes fijo) para mantener el impacto bajo |
 
-Objetivo: **$35-50/mes con todo arriba**, cerca de $0 con el entorno apagado salvo por la
-base (que ahora, al no ser Aurora Serverless, no puede pausarse -- su costo fijo es chico
-pero constante). Ese numero es el costo del CLON de portfolio (datos de prueba, casi sin
+Objetivo: **$48-60/mes con todo arriba** (subio desde los $35-50 originales -- la base ya
+no se puede pausar), cerca de $0 con el entorno apagado salvo por la base (fija, no se
+puede pausar). Ese numero es el costo del CLON de portfolio (datos de prueba, casi sin
 trafico real). Ver abajo el costo estimado si esto sirviera de verdad a Academia Premier.
 
 Pendiente de armar: AWS Budget con alerta a $50 y a $100 (Fase 0).
@@ -147,8 +147,9 @@ CloudFront y S3 no tienen este mecanismo o no conviene aplicarlo con trafico esp
 Para el CLON (este repo): **ningun compromiso conviene** -- el proyecto se destruye
 con `terraform destroy`, comprometerse a 1-3 anios de gasto fijo pierde plata en vez
 de ahorrarla. Para el escenario de produccion real (ver capacidad objetivo arriba),
-un Savings Plan de 1 anio bajaria el total estimado de ~$110-150 a ~$99-136/mes;
-3 anios todo adelantado, a ~$90-125/mes -- solo la porcion de Fargate cambia.
+un compromiso de 1 anio bajaria el total estimado de ~$120-170 a ~$100-145/mes;
+3 anios todo adelantado, a ~$85-125/mes -- ahora la porcion de Fargate **y** RDS
+cambian juntas (antes solo Fargate calificaba, Aurora Serverless v2 no).
 
 Reporte visual completo (para el video): [Costos Academia Premier](https://claude.ai/artifact/TpXWXUL6SATLWzdzPtUU7N)
 
