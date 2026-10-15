@@ -9,7 +9,7 @@
         <mxCell id="titulo" value="Academia Premier — replica sobre AWS" style="text;html=1;fontSize=22;fontColor=#232F3E;fontStyle=1;align=left;" vertex="1" parent="1">
           <mxGeometry x="100" y="60" width="700" height="34" as="geometry" />
         </mxCell>
-        <mxCell id="subtitulo" value="SaaS multi-tenant: GoTrue + PostgREST reemplazan a Supabase, sobre Aurora Serverless v2" style="text;html=1;fontSize=14;fontColor=#879196;align=left;" vertex="1" parent="1">
+        <mxCell id="subtitulo" value="SaaS multi-tenant: GoTrue + PostgREST reemplazan a Supabase, sobre RDS PostgreSQL" style="text;html=1;fontSize=14;fontColor=#879196;align=left;" vertex="1" parent="1">
           <mxGeometry x="100" y="96" width="800" height="24" as="geometry" />
         </mxCell>
 
@@ -56,8 +56,8 @@
           <mxGeometry x="810" y="620" width="76" height="76" as="geometry" />
         </mxCell>
 
-        <!-- ============ AURORA ============ -->
-        <mxCell id="aurora" value="Aurora Serverless v2&#10;Postgres · escala a 0&#10;25 tablas · RLS activa" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=#4D72F3;fillColor=#3334B9;strokeColor=none;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.aurora;html=1;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;align=center;fontSize=12;" vertex="1" parent="1">
+        <!-- ============ RDS POSTGRESQL ============ -->
+        <mxCell id="aurora" value="RDS PostgreSQL&#10;Postgres 15.19 · db.t4g.micro&#10;25 tablas · RLS activa" style="sketch=0;outlineConnect=0;fontColor=#232F3E;gradientColor=#4D72F3;fillColor=#3334B9;strokeColor=none;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.rds;html=1;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;verticalAlign=top;align=center;fontSize=12;" vertex="1" parent="1">
           <mxGeometry x="1070" y="495" width="76" height="76" as="geometry" />
         </mxCell>
 

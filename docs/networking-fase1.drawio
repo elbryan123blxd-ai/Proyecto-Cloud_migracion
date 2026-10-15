@@ -23,7 +23,7 @@
         <mxCell id="leg1" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ED7100;strokeColor=none;" vertex="1" parent="1"><mxGeometry x="1512" y="42" width="14" height="14" as="geometry" /></mxCell>
         <mxCell id="leg1t" value="Compute (Fargate)" style="text;html=1;fontSize=10;fontColor=#5A6B7B;" vertex="1" parent="1"><mxGeometry x="1530" y="40" width="150" height="18" as="geometry" /></mxCell>
         <mxCell id="leg2" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#527FFF;strokeColor=none;" vertex="1" parent="1"><mxGeometry x="1512" y="60" width="14" height="14" as="geometry" /></mxCell>
-        <mxCell id="leg2t" value="Base de datos (Aurora)" style="text;html=1;fontSize=10;fontColor=#5A6B7B;" vertex="1" parent="1"><mxGeometry x="1530" y="58" width="150" height="18" as="geometry" /></mxCell>
+        <mxCell id="leg2t" value="Base de datos (RDS Postgres)" style="text;html=1;fontSize=10;fontColor=#5A6B7B;" vertex="1" parent="1"><mxGeometry x="1530" y="58" width="150" height="18" as="geometry" /></mxCell>
         <mxCell id="leg3" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#8C4FFF;strokeColor=none;" vertex="1" parent="1"><mxGeometry x="1512" y="78" width="14" height="14" as="geometry" /></mxCell>
         <mxCell id="leg3t" value="Networking (ALB, IGW, Endpoints)" style="text;html=1;fontSize=10;fontColor=#5A6B7B;" vertex="1" parent="1"><mxGeometry x="1530" y="76" width="200" height="18" as="geometry" /></mxCell>
         <mxCell id="leg4" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#D6B656;strokeColor=none;" vertex="1" parent="1"><mxGeometry x="1750" y="42" width="14" height="14" as="geometry" /></mxCell>
@@ -85,7 +85,7 @@
         </mxCell>
         <mxCell id="n4" value="④" style="text;html=1;fontSize=14;fontStyle=1;fontColor=#C0392B;" vertex="1" parent="1"><mxGeometry x="220" y="586" width="24" height="24" as="geometry" /></mxCell>
 
-        <mxCell id="aurora_a" value="Aurora Serverless v2&#10;Postgres 15.4 · writer&#10;0 → 1 ACU" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.aurora;fillColor=#527FFF;strokeColor=none;html=1;verticalLabelPosition=bottom;verticalAlign=top;fontSize=10;" vertex="1" parent="1">
+        <mxCell id="aurora_a" value="RDS PostgreSQL&#10;Postgres 15.19&#10;db.t4g.micro · Single-AZ" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.rds;fillColor=#527FFF;strokeColor=none;html=1;verticalLabelPosition=bottom;verticalAlign=top;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="160" y="700" width="48" height="48" as="geometry" />
         </mxCell>
         <mxCell id="sg_aurora_a" value="sg-aurora&#10;IN  5432/tcp ← sg-servicios" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=9;align=left;spacingLeft=6;" vertex="1" parent="1">
@@ -145,10 +145,10 @@
           <mxGeometry x="1340" y="610" width="280" height="34" as="geometry" />
         </mxCell>
 
-        <mxCell id="aurora_b" value="Aurora: subnet group&#10;abarca esta AZ tambien&#10;(sin instancia activa hoy)" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.aurora;fillColor=#AEBFEF;strokeColor=none;html=1;verticalLabelPosition=bottom;verticalAlign=top;fontSize=9;dashed=1;" vertex="1" parent="1">
+        <mxCell id="aurora_b" value="RDS: subnet group&#10;abarca esta AZ tambien&#10;(Single-AZ, sin instancia aca)" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.rds;fillColor=#AEBFEF;strokeColor=none;html=1;verticalLabelPosition=bottom;verticalAlign=top;fontSize=9;dashed=1;" vertex="1" parent="1">
           <mxGeometry x="1100" y="700" width="44" height="44" as="geometry" />
         </mxCell>
-        <mxCell id="nota_aurora_b" value="Si algun dia se agrega un reader,&#10;nace aca para repartir carga de lectura" style="text;html=1;fontSize=9;fontColor=#8E8E8E;fontStyle=2;" vertex="1" parent="1">
+        <mxCell id="nota_aurora_b" value="El free tier solo permite Single-AZ&#10;para RDS normal -- no Aurora Serverless" style="text;html=1;fontSize=9;fontColor=#8E8E8E;fontStyle=2;" vertex="1" parent="1">
           <mxGeometry x="1200" y="705" width="320" height="34" as="geometry" />
         </mxCell>
 
@@ -205,7 +205,7 @@
         <mxCell id="tabla_sg_titulo" value="Security groups — regla exacta" style="text;html=1;fontSize=14;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="1">
           <mxGeometry x="40" y="1260" width="500" height="24" as="geometry" />
         </mxCell>
-        <mxCell id="tabla_sg" value="sg-alb            IN  443/tcp    &#8592; 0.0.0.0/0 (Internet)&#10;sg-servicios      IN  todo/tcp  &#8592; sg-alb&#10;sg-aurora         IN  5432/tcp  &#8592; sg-servicios&#10;sg-vpc-endpoints  IN  443/tcp    &#8592; sg-servicios&#10;&#10;Nadie se salta un escalon: Internet nunca habla directo con Aurora ni con los endpoints." style="text;html=1;fontSize=11;fontFamily=Courier New;align=left;verticalAlign=top;fillColor=#F5F5F5;strokeColor=#CCCCCC;rounded=0;spacing=8;" vertex="1" parent="1">
+        <mxCell id="tabla_sg" value="sg-alb            IN  443/tcp    &#8592; 0.0.0.0/0 (Internet)&#10;sg-servicios      IN  todo/tcp  &#8592; sg-alb&#10;sg-aurora         IN  5432/tcp  &#8592; sg-servicios  (protege RDS Postgres)&#10;sg-vpc-endpoints  IN  443/tcp    &#8592; sg-servicios&#10;&#10;Nadie se salta un escalon: Internet nunca habla directo con la base ni con los endpoints." style="text;html=1;fontSize=11;fontFamily=Courier New;align=left;verticalAlign=top;fillColor=#F5F5F5;strokeColor=#CCCCCC;rounded=0;spacing=8;" vertex="1" parent="1">
           <mxGeometry x="40" y="1292" width="680" height="110" as="geometry" />
         </mxCell>
 
@@ -219,7 +219,7 @@
         <mxCell id="tabla_flujo_titulo" value="El camino de un login, paso a paso" style="text;html=1;fontSize=14;fontStyle=1;fontColor=#232F3E;" vertex="1" parent="1">
           <mxGeometry x="1400" y="1260" width="500" height="24" as="geometry" />
         </mxCell>
-        <mxCell id="tabla_flujo" value="① Alumno abre la app, HTTPS&#10;② Entra por el Internet Gateway&#10;③ Llega al ALB (subred publica), puerto 443&#10;④ ALB reparte por sg-alb -&gt; sg-servicios&#10;⑤ GoTrue valida contra Aurora, puerto 5432&#10;⑥ GoTrue pide la password a Secrets Manager&#10;   via VPC Endpoint, puerto 443 -- nunca sale&#10;   a Internet para hacerlo" style="text;html=1;fontSize=11;fontFamily=Courier New;align=left;verticalAlign=top;fillColor=#F5F5F5;strokeColor=#CCCCCC;rounded=0;spacing=8;" vertex="1" parent="1">
+        <mxCell id="tabla_flujo" value="① Alumno abre la app, HTTPS&#10;② Entra por el Internet Gateway&#10;③ Llega al ALB (subred publica), puerto 443&#10;④ ALB reparte por sg-alb -&gt; sg-servicios&#10;⑤ GoTrue valida contra RDS Postgres, puerto 5432&#10;⑥ GoTrue pide la password a Secrets Manager&#10;   via VPC Endpoint, puerto 443 -- nunca sale&#10;   a Internet para hacerlo" style="text;html=1;fontSize=11;fontFamily=Courier New;align=left;verticalAlign=top;fillColor=#F5F5F5;strokeColor=#CCCCCC;rounded=0;spacing=8;" vertex="1" parent="1">
           <mxGeometry x="1400" y="1292" width="560" height="150" as="geometry" />
         </mxCell>
 
