@@ -38,10 +38,12 @@ resource "random_password" "aurora_master" {
 resource "aws_db_instance" "db" {
   identifier = "academia-premier-db"
   engine     = "postgres"
-  # Version disponible en el momento de aplicar -- si AWS no tiene esta
-  # version exacta en us-east-2, ajustar aca (no es Aurora: las versiones
-  # disponibles son las de RDS Postgres normal, pueden diferir).
-  engine_version = "15.4"
+  # Confirmada disponible en us-east-2 el 2026-10-15 con:
+  #   aws rds describe-db-engine-versions --engine postgres --region us-east-2
+  # "15.4" (la version original pedida) ya no existe -- AWS retira versiones
+  # menores con el tiempo. Si esto vuelve a fallar en el futuro, correr ese
+  # comando de nuevo y actualizar aca.
+  engine_version = "15.19"
 
   instance_class    = var.db_instance_class # db.t4g.micro por defecto -- el minimo, alcanza para el clon
   allocated_storage = 20                    # GB -- el minimo tipico, de sobra para datos de prueba
