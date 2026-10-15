@@ -166,6 +166,18 @@ resource "aws_security_group" "aurora" {
     security_groups = [aws_security_group.servicios.id]
   }
 
+  # Sin este bloque, AWS deja la regla de salida por defecto: todo permitido.
+  # Aurora nunca inicia conexiones salientes -- declarar un egress vacio hace
+  # que Terraform tome control de la regla y bloquee TODA salida a proposito,
+  # en vez de dejarlo implicito.
+  egress {
+    description = "Sin salida -- Aurora nunca necesita iniciar conexiones"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = []
+  }
+
   tags = { Name = "academia-premier-sg-aurora" }
 }
 
@@ -182,6 +194,17 @@ resource "aws_security_group" "vpc_endpoints" {
     to_port         = 443
     protocol        = "tcp"
     security_groups = [aws_security_group.servicios.id]
+  }
+
+  # Mismo motivo que sg-aurora: un endpoint solo RECIBE conexiones, nunca
+  # las inicia. Bloqueamos toda salida a proposito en vez de dejarlo en el
+  # default "todo permitido" de AWS.
+  egress {
+    description = "Sin salida -- un VPC Endpoint nunca inicia conexiones"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = []
   }
 
   tags = { Name = "academia-premier-sg-vpc-endpoints" }
