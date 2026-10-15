@@ -40,13 +40,19 @@ no suma nada distinto al portfolio.
 
 ## La cuenta de AWS
 
-Cuenta nueva del programa de creditos **"AWS Ready Set Build"**. Dos restricciones propias
+Cuenta nueva del programa de creditos **"AWS Ready Set Build"**. Tres restricciones propias
 de este tipo de cuenta, confirmadas a mano, no documentadas por AWS de antemano:
 
 - **Una sola region habilitada: us-east-2 (Ohio).** Todo el proyecto vive ahi.
 - **IAM Identity Center (SSO) no esta disponible** ("Access to this service is not
   supported"). Motivo tecnico: estas cuentas ya pertenecen a la Organization propia de
   AWS, y una cuenta no puede tener su propio Identity Center si ya es miembro de otra.
+- **Aurora exige "Express Configuration" en cuentas de este plan.** Descubierto
+  2026-10-15 al correr el primer `terraform apply` de Fase 1: `CreateDBCluster` fallo con
+  `FreeTierRestrictionError: To use Aurora clusters with free plan accounts you need to
+  set WithExpressConfiguration`. No es un parametro estandar documentado de Terraform/AWS
+  -- en investigacion. VPC, subredes, security groups y VPC Endpoints SI se crearon bien
+  (el fallo fue especificamente en `aws_rds_cluster.aurora`, no antes).
 
 ### Como se entra a AWS (por la restriccion de arriba)
 
