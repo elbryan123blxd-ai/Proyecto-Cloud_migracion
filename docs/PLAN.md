@@ -69,12 +69,13 @@ Objetivo: **$35-50/mes** con todo arriba, y casi $0 con el entorno apagado.
       (requiere Aurora + GoTrue desplegados, Fases 1-2)
 
 ### Fase 1 - Red y base
-- [x] Codigo escrito (`terraform/red-y-base/`): VPC, subredes publicas/privadas,
+- [x] Aplicada 2026-10-15 (`terraform/red-y-base/`): VPC, subredes publicas/privadas,
       security groups, VPC Endpoints (S3, ECR, Secrets Manager, CloudWatch Logs),
-      RDS PostgreSQL normal (`db.t4g.micro`, cambiado desde Aurora Serverless v2
-      por restriccion del free tier -- ver CLAUDE.md), Secrets Manager. Validado
-      con `terraform validate` -- falta correr `terraform apply` (Bryan, con MFA)
-- [ ] Cargar esquema + datos generados (requiere que la base exista)
+      RDS PostgreSQL (`academia-premier-db`, Postgres 15.19, `db.t4g.micro` --
+      cambiado desde Aurora Serverless v2 por restriccion del free tier, ver
+      CLAUDE.md), Secrets Manager. Confirmado en consola, us-east-2
+- [ ] Cargar esquema + datos generados -- pendiente resolver como conectarse
+      (la base no tiene IP publica a proposito)
 
 ### Fase 2 - El Supabase propio
 - [ ] Cluster ECS Fargate

@@ -226,8 +226,12 @@ apuntando a esto.
       la nota habia quedado desactualizada
 - [x] Generador de datos falsos (`scripts/seed/generar_datos.py`) -- falta
       correrlo de verdad, necesita Aurora + GoTrue desplegados (Fases 1-2)
-- [x] Fase 1 escrita (`terraform/red-y-base/`), validada con `terraform validate`
-- [ ] `terraform apply` de Fase 1 -- **siguiente paso real**, necesita sesion MFA (Bryan)
+- [x] Fase 1 aplicada 2026-10-15: VPC, subredes, security groups, VPC Endpoints,
+      RDS PostgreSQL (`academia-premier-db`, Postgres 15.19, `db.t4g.micro`) y
+      Secrets Manager, todo creado y confirmado en consola, us-east-2
+- [ ] Cargar `db/schema.sql` contra la base -- **siguiente paso real** (ver nota
+      abajo: la base no tiene IP publica, hace falta un camino para conectarse)
+- [ ] Correr `scripts/seed/generar_datos.py` (despues del schema)
 - [ ] Prueba de carga real (60 admins + 30k alumnos en 3 oleadas) -- ver Fase 5 en
       `docs/PLAN.md`, requiere Fases 1-4 completas primero
 
