@@ -27,7 +27,7 @@ Codigo fuente del producto real: repo privado `Proyecto_Full_Stack2.0`. Ese codi
 
 | Pieza en Supabase/Vercel | Reemplazo en AWS | Por que |
 |---|---|---|
-| Postgres | Aurora Serverless v2, minimo 0 ACU | Escala a cero: el proyecto esta idle el 95% del tiempo |
+| Postgres | **RDS PostgreSQL normal** (`db.t4g.micro`) -- ver nota abajo | La cuenta free tier no permite Aurora con VPC propia |
 | Auth (Supabase Auth) | GoTrue autohospedado en ECS Fargate | Las politicas RLS usan `auth.uid()`. Cognito las rompe todas y mueve la autorizacion del multi-tenant de la base al codigo |
 | API autogenerada | PostgREST en ECS Fargate | Mismo motivo que arriba: mantiene pool de conexiones estable, por eso Fargate y no Lambda |
 | Storage | S3 | — |
@@ -47,12 +47,20 @@ de este tipo de cuenta, confirmadas a mano, no documentadas por AWS de antemano:
 - **IAM Identity Center (SSO) no esta disponible** ("Access to this service is not
   supported"). Motivo tecnico: estas cuentas ya pertenecen a la Organization propia de
   AWS, y una cuenta no puede tener su propio Identity Center si ya es miembro de otra.
-- **Aurora exige "Express Configuration" en cuentas de este plan.** Descubierto
+- **Aurora no se puede usar con VPC propia en este plan -- sin excepcion.** Descubierto
   2026-10-15 al correr el primer `terraform apply` de Fase 1: `CreateDBCluster` fallo con
-  `FreeTierRestrictionError: To use Aurora clusters with free plan accounts you need to
-  set WithExpressConfiguration`. No es un parametro estandar documentado de Terraform/AWS
-  -- en investigacion. VPC, subredes, security groups y VPC Endpoints SI se crearon bien
-  (el fallo fue especificamente en `aws_rds_cluster.aurora`, no antes).
+  `FreeTierRestrictionError`, pidiendo `WithExpressConfiguration`. Investigado a fondo: el
+  AWS CLI si soporta ese flag (Terraform todavia no), pero "Express Configuration" crea el
+  cluster **fuera de cualquier VPC**, con acceso publico por Internet y **solo
+  autenticacion IAM** (nada de password/Secrets Manager) -- documentado oficialmente por
+  AWS: *"You cannot associate express clusters with a VPC"*, *"You cannot disable the
+  internet access gateway"*. Confirmado tambien que es una restriccion del **free tier en
+  general** (no solo de "Ready Set Build"): "Only clusters created with express
+  configuration are supported (full configuration is not available)". Rompe el pilar de
+  seguridad central del proyecto (base aislada, sin acceso a Internet). VPC, subredes,
+  security groups y VPC Endpoints SI se crearon bien en ese primer apply (el fallo fue
+  especificamente al crear el cluster). **Decision:** cambiar de Aurora Serverless v2 a
+  RDS PostgreSQL normal (`db.t4g.micro`) -- ver "El modulo de Fase 1" abajo.
 
 ### Como se entra a AWS (por la restriccion de arriba)
 
@@ -87,11 +95,12 @@ Los tres gastos que funden creditos sin avisar:
 |---|---|---|
 | NAT Gateway | ~$32/mes | No se usa. VPC Endpoints o subredes publicas con security groups cerrados |
 | Load Balancer | ~$17/mes | Uno solo para todos los servicios |
-| Base encendida 24/7 | ~$13-43/mes | Aurora Serverless v2 escala a 0 |
+| Base encendida 24/7 | ~$13-43/mes | Antes: Aurora Serverless v2 escala a 0. Ahora (ver mas abajo): RDS normal no puede escalar a 0, asi que se usa la instancia mas chica posible (`db.t4g.micro`) para mantener el costo igual de bajo |
 
-Objetivo: **$35-50/mes con todo arriba**, cerca de $0 con el entorno apagado. Ese numero
-es el costo del CLON de portfolio (datos de prueba, casi sin trafico real). Ver abajo el
-costo estimado si esto sirviera de verdad a Academia Premier.
+Objetivo: **$35-50/mes con todo arriba**, cerca de $0 con el entorno apagado salvo por la
+base (que ahora, al no ser Aurora Serverless, no puede pausarse -- su costo fijo es chico
+pero constante). Ese numero es el costo del CLON de portfolio (datos de prueba, casi sin
+trafico real). Ver abajo el costo estimado si esto sirviera de verdad a Academia Premier.
 
 Pendiente de armar: AWS Budget con alerta a $50 y a $100 (Fase 0).
 
@@ -128,12 +137,12 @@ queda anotado como el paso que faltaria si esto alguna vez dejara de ser portfol
 
 ## Descuentos por compromiso (Savings Plans) -- documentado 2026-10-14
 
-Solo **Fargate** califica para Compute Savings Plans (1-3 anios, ~20-50% de descuento
-segun termino y pago adelantado). Aurora Serverless v2 **no** califica -- las Reserved
-Instances de Aurora/RDS son solo para "Provisioned", no para Serverless v2. Es el
-trade-off de haber elegido elasticidad (escala a 0) sobre poder comprometerse a un
-precio fijo. ALB, Lambda, CloudFront y S3 tampoco tienen este mecanismo o no conviene
-aplicarlo con trafico esporadico.
+**Fargate** califica para Compute Savings Plans (1-3 anios, ~20-50% de descuento segun
+termino y pago adelantado). **RDS PostgreSQL normal tambien califica** para Reserved
+Instances (a diferencia de Aurora Serverless v2, que no calificaba) -- es un efecto
+colateral positivo del cambio de motor: al no poder usar Aurora en este plan, terminamos
+con una base que SI se puede comprometer a precio fijo en produccion real. ALB, Lambda,
+CloudFront y S3 no tienen este mecanismo o no conviene aplicarlo con trafico esporadico.
 
 Para el CLON (este repo): **ningun compromiso conviene** -- el proyecto se destruye
 con `terraform destroy`, comprometerse a 1-3 anios de gasto fijo pierde plata en vez
@@ -148,7 +157,7 @@ Reporte visual completo (para el video): [Costos Academia Premier](https://claud
 Ver `docs/PLAN.md` para el detalle completo con checkboxes. Resumen:
 
 0. Fundaciones (budget, backend remoto, datos generados) — **en curso**
-1. Red y base (VPC, Aurora, Secrets Manager)
+1. Red y base (VPC, RDS PostgreSQL, Secrets Manager)
 2. El Supabase propio (ECS Fargate: GoTrue + PostgREST, S3, un ALB)
 3. Las apps Next.js
 4. CI/CD (GitHub Actions con OIDC, restringido a este repo y a `main`)
@@ -185,9 +194,14 @@ https://app.diagrams.net/?url=https://raw.githubusercontent.com/elbryan123blxd-a
 ```
 
 Estructura: capas ENTRADA -> FRONTEND -> SERVICIOS -> DATOS, con un sub-contenedor
-punteado para la VPC privada (GoTrue + PostgREST + Aurora), y el backend de Terraform
-(S3 + DynamoDB) en una caja aparte, marcado explicitamente como "no participa del
-runtime" -- es tooling para construir la infraestructura, no parte de la app.
+punteado para la VPC privada (GoTrue + PostgREST + base de datos), y el backend de
+Terraform (S3 + DynamoDB) en una caja aparte, marcado explicitamente como "no participa
+del runtime" -- es tooling para construir la infraestructura, no parte de la app.
+
+**Pendiente de actualizar (2026-10-15):** el icono y el texto siguen diciendo "Aurora
+Serverless v2" -- ahora es RDS PostgreSQL normal (ver "El modulo de Fase 1" abajo). El
+reporte de costos del video ([link](https://claude.ai/artifact/TpXWXUL6SATLWzdzPtUU7N))
+tambien menciona a Aurora y necesita el mismo ajuste.
 
 ## El bootstrap de Terraform (`terraform/bootstrap/`)
 
@@ -222,16 +236,42 @@ apuntando a esto.
 Backend `s3` apuntando al bootstrap. Crea:
 
 - **VPC** (`10.0.0.0/16`) con 2 subredes publicas (el ALB, Fase 2) y 2 privadas
-  (GoTrue, PostgREST, Aurora, VPC Endpoints), una por AZ.
+  (GoTrue, PostgREST, la base, VPC Endpoints), una por AZ.
 - **Sin NAT Gateway** -- la subred privada solo sale por VPC Endpoints: `s3`
   (Gateway, gratis), `ecr.api`/`ecr.dkr`/`secretsmanager`/`logs` (Interface,
   ~$7/mes cada uno). Ver CLAUDE.md "Presupuesto" para el razonamiento completo.
 - **Security groups** en cadena: Internet -> `sg-alb` -> `sg-servicios` ->
-  `sg-aurora`/`sg-vpc-endpoints`. Nada se salta un escalon.
-- **Aurora Serverless v2** Postgres 15.4, `min_capacity = 0` (se pausa sola),
-  `max_capacity = 1` (el clon no tiene trafico real que justifique mas).
-- **Secrets Manager**: usuario/password/host/puerto de Aurora, generados por
+  `sg-aurora`/`sg-vpc-endpoints`. Nada se salta un escalon. `sg-aurora` y
+  `sg-vpc-endpoints` tienen egress bloqueado a proposito (nunca inician conexiones).
+- **RDS PostgreSQL normal** (`rds.tf`), no Aurora -- ver abajo el por que. Postgres
+  15.4, instancia `db.t4g.micro` (configurable via `var.db_instance_class`),
+  Single-AZ, `storage_type = gp2` (gp3 no entra en el free tier).
+- **Secrets Manager**: usuario/password/host/puerto de la base, generados por
   Terraform (`random_password`), nunca escritos a mano.
 
+### Por que RDS normal y no Aurora Serverless v2
+
+El plan original era Aurora Serverless v2 (escala a 0). El primer `terraform apply`
+(2026-10-15) fallo: la cuenta free tier solo permite crear Aurora con "Express
+Configuration", que **no admite VPC propia, ni security group propio, ni password**
+(solo IAM auth, acceso publico por Internet) -- rompe el pilar de seguridad central
+del proyecto. Confirmado con la documentacion oficial de AWS y con un intento real via
+AWS CLI (`--with-express-configuration`), no solo con Terraform. Investigado a fondo
+que no hay forma de pedir una excepcion dentro del free tier.
+
+RDS PostgreSQL normal (una instancia, no un cluster Aurora) **no tiene esa
+restriccion** -- permite VPC propia, security group propio y password igual que el
+diseno original. Lo unico que se pierde es "escala a 0": una instancia RDS normal
+esta siempre prendida, asi que se compensa usando la instancia mas chica posible
+(`db.t4g.micro`) para mantener el costo igual de bajo que tenia el objetivo original.
+Efecto colateral positivo: RDS normal SI califica para Reserved Instances a futuro
+(Aurora Serverless v2 no calificaba).
+
+**Importante para producción real (no el clon):** `db.t4g.micro` (1GB RAM) de ninguna
+manera aguantaria el escenario de 60 admins + 30k alumnos documentado mas abajo -- hace
+falta una instancia bastante mas grande (familia `r6g`/`m6g`). El tamano exacto es
+justamente lo que la prueba de carga de la Fase 5 deberia determinar, no algo que se
+pueda calcular solo en teoria.
+
 Pendiente, en ese orden: `terraform apply` (Bryan, MFA) -> cargar
-`db/schema.sql` contra Aurora -> correr `scripts/seed/generar_datos.py`.
+`db/schema.sql` contra la base -> correr `scripts/seed/generar_datos.py`.

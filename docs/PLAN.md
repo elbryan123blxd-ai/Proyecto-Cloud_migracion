@@ -18,7 +18,7 @@ y no se toca.
 | Auth | Supabase Auth autohospedado (GoTrue) | Las politicas RLS usan `auth.uid()`. Migrar a Cognito obliga a reescribirlas todas y saca la seguridad de la base |
 | Compute de servicios | ECS Fargate | GoTrue y PostgREST mantienen pool de conexiones. En Lambda cada copia abre el suyo y agota la base |
 | Compute de apps | Amplify / Lambda + CloudFront | Serverless real donde si conviene |
-| Base | Aurora Serverless v2, minimo 0 ACU | Se apaga sola cuando nadie la usa. El proyecto va a estar idle el 95% del tiempo |
+| Base | RDS PostgreSQL normal (`db.t4g.micro`) | El plan original era Aurora Serverless v2, pero el free tier de esta cuenta no permite Aurora con VPC propia (solo "Express Configuration", publica y sin password). Cambiado 2026-10-15, ver CLAUDE.md |
 | Datos | Generados | Son datos de menores de edad. No van a una infra de practica |
 | IaC | Terraform | Todo reproducible y destruible |
 
@@ -41,7 +41,7 @@ Los tres que funden la cuenta sin avisar:
 |---|---|---|
 | NAT Gateway | ~$32/mes | No se usa. VPC Endpoints o subredes publicas con security groups cerrados |
 | Load Balancer | ~$17/mes | Uno solo para todos los servicios |
-| Base encendida 24/7 | ~$13-43/mes | Aurora escala a 0 |
+| Base encendida 24/7 | ~$13-43/mes | RDS no escala a 0 (no es Aurora) -- se usa la instancia mas chica posible para compensar |
 
 Objetivo: **$35-50/mes** con todo arriba, y casi $0 con el entorno apagado.
 
@@ -71,9 +71,10 @@ Objetivo: **$35-50/mes** con todo arriba, y casi $0 con el entorno apagado.
 ### Fase 1 - Red y base
 - [x] Codigo escrito (`terraform/red-y-base/`): VPC, subredes publicas/privadas,
       security groups, VPC Endpoints (S3, ECR, Secrets Manager, CloudWatch Logs),
-      Aurora Serverless v2 (min 0 ACU), Secrets Manager. Validado con
-      `terraform validate` -- falta correr `terraform apply` (Bryan, con MFA)
-- [ ] Cargar esquema + datos generados (requiere que Aurora exista)
+      RDS PostgreSQL normal (`db.t4g.micro`, cambiado desde Aurora Serverless v2
+      por restriccion del free tier -- ver CLAUDE.md), Secrets Manager. Validado
+      con `terraform validate` -- falta correr `terraform apply` (Bryan, con MFA)
+- [ ] Cargar esquema + datos generados (requiere que la base exista)
 
 ### Fase 2 - El Supabase propio
 - [ ] Cluster ECS Fargate

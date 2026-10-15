@@ -22,11 +22,11 @@ output "sg_alb_id" {
 }
 
 output "aurora_endpoint" {
-  description = "Host de Aurora para que GoTrue/PostgREST se conecten"
-  value       = aws_rds_cluster.aurora.endpoint
+  description = "Host de la base (RDS PostgreSQL) para que GoTrue/PostgREST se conecten"
+  value       = aws_db_instance.db.address
 }
 
 output "aurora_secret_arn" {
-  description = "ARN del secreto en Secrets Manager con las credenciales de Aurora"
+  description = "ARN del secreto en Secrets Manager con las credenciales de la base"
   value       = aws_secretsmanager_secret.aurora_credentials.arn
 }

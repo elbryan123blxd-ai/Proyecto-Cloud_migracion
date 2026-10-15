@@ -11,19 +11,13 @@ variable "subredes_publicas_cidr" {
 }
 
 variable "subredes_privadas_cidr" {
-  description = "Una por AZ. GoTrue, PostgREST, Aurora y los VPC Endpoints viven aca -- sin acceso directo desde Internet"
+  description = "Una por AZ. GoTrue, PostgREST, la base y los VPC Endpoints viven aca -- sin acceso directo desde Internet"
   type        = list(string)
   default     = ["10.0.10.0/24", "10.0.11.0/24"]
 }
 
-variable "aurora_min_acu" {
-  description = "Minimo de Aurora Capacity Units. 0 = puede pausarse del todo cuando nadie la usa"
-  type        = number
-  default     = 0
-}
-
-variable "aurora_max_acu" {
-  description = "Maximo de ACU para el clon (sin trafico real, no hace falta mas)"
-  type        = number
-  default     = 1
+variable "db_instance_class" {
+  description = "Tamano de la instancia RDS. db.t4g.micro alcanza para el clon (sin trafico real) -- para produccion real con 30k alumnos haria falta una instancia bastante mas grande, ver rds.tf"
+  type        = string
+  default     = "db.t4g.micro"
 }
