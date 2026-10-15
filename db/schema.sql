@@ -385,10 +385,10 @@ alter table personal          add constraint personal_academia_fkey          for
 alter table salones           add constraint salones_academia_fkey           foreign key (academia_id) references academias(id) on delete cascade;
 alter table salones           add constraint salones_cycle_fkey              foreign key (cycle_id) references cycles(id);
 alter table salones           add constraint salones_tutor_fkey              foreign key (tutor_id) references personal(id);
-alter table profiles          add constraint profiles_id_fkey                foreign key (id) references auth.users(id) on delete cascade;
+-- profiles_id_fkey y students_user_fkey (-> auth.users) quedan afuera:
+-- auth.users lo crea GoTrue solo, al arrancar (Fase 2). Ver db/post-gotrue-fks.sql
 alter table profiles          add constraint profiles_academia_fkey          foreign key (academia_id) references academias(id) on delete cascade;
 alter table students          add constraint students_academia_fkey          foreign key (academia_id) references academias(id) on delete cascade;
-alter table students          add constraint students_user_fkey              foreign key (user_id) references auth.users(id);
 alter table students          add constraint students_salon_fkey             foreign key (salon_id) references salones(id);
 alter table cursos            add constraint cursos_academia_fkey            foreign key (academia_id) references academias(id) on delete cascade;
 alter table matriculas        add constraint matriculas_academia_fkey        foreign key (academia_id) references academias(id) on delete cascade;
@@ -421,13 +421,13 @@ alter table observaciones_tutor add constraint observaciones_tutor_tutor_fkey   
 alter table noticias          add constraint noticias_academia_fkey          foreign key (academia_id) references academias(id) on delete cascade;
 alter table noticias          add constraint noticias_autor_fkey             foreign key (autor_id) references profiles(id);
 alter table noticias_leidas   add constraint noticias_leidas_noticia_fkey    foreign key (noticia_id) references noticias(id) on delete cascade;
-alter table noticias_leidas   add constraint noticias_leidas_user_fkey       foreign key (user_id) references auth.users(id) on delete cascade;
+-- noticias_leidas_user_fkey y contenidos_vistos_user_fkey (-> auth.users)
+-- quedan afuera por el mismo motivo. Ver db/post-gotrue-fks.sql
 alter table contenidos        add constraint contenidos_academia_fkey        foreign key (academia_id) references academias(id) on delete cascade;
 alter table contenidos        add constraint contenidos_cycle_fkey           foreign key (cycle_id) references cycles(id);
 alter table contenidos        add constraint contenidos_salon_fkey           foreign key (salon_id) references salones(id);
 alter table contenidos        add constraint contenidos_autor_fkey           foreign key (autor_id) references profiles(id);
 alter table contenidos_vistos add constraint contenidos_vistos_contenido_fkey foreign key (contenido_id) references contenidos(id) on delete cascade;
-alter table contenidos_vistos add constraint contenidos_vistos_user_fkey      foreign key (user_id) references auth.users(id) on delete cascade;
 alter table exams             add constraint exams_academia_fkey             foreign key (academia_id) references academias(id) on delete cascade;
 alter table exams             add constraint exams_ciclo_fkey                foreign key (ciclo) references cycles(id);
 alter table exam_results      add constraint exam_results_academia_fkey      foreign key (academia_id) references academias(id) on delete cascade;
