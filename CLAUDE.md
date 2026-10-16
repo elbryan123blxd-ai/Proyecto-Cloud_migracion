@@ -230,9 +230,14 @@ apuntando a esto.
 - [x] Fase 1 aplicada 2026-10-15: VPC, subredes, security groups, VPC Endpoints,
       RDS PostgreSQL (`academia-premier-db`, Postgres 15.19, `db.t4g.micro`) y
       Secrets Manager, todo creado y confirmado en consola, us-east-2
-- [ ] Cargar `db/schema.sql` contra la base -- **siguiente paso real** (ver nota
-      abajo: la base no tiene IP publica, hace falta un camino para conectarse)
-- [ ] Correr `scripts/seed/generar_datos.py` (despues del schema)
+- [x] `db/schema.sql` cargado contra la base real -- 2026-10-16, via CloudShell
+      (VPC environment), IP privada directa (`10.0.10.206`). Confirmado: 25
+      tablas, 88 policies RLS, 57 funciones (21 propias + extensiones). Ver
+      "El hallazgo de auth.uid()" abajo
+- [ ] Sacar el acceso temporal de CloudShell a la base (**siguiente paso real**,
+      ver `terraform/red-y-base/temporal-acceso-schema.tf` -- preparado para
+      borrar, falta correr `terraform apply`)
+- [ ] Correr `scripts/seed/generar_datos.py` (despues de GoTrue, Fase 2)
 - [ ] Prueba de carga real (60 admins + 30k alumnos en 3 oleadas) -- ver Fase 5 en
       `docs/PLAN.md`, requiere Fases 1-4 completas primero
 
@@ -278,5 +283,30 @@ falta una instancia bastante mas grande (familia `r6g`/`m6g`). El tamano exacto 
 justamente lo que la prueba de carga de la Fase 5 deberia determinar, no algo que se
 pueda calcular solo en teoria.
 
-Pendiente, en ese orden: `terraform apply` (Bryan, MFA) -> cargar
-`db/schema.sql` contra la base -> correr `scripts/seed/generar_datos.py`.
+Pendiente, en ese orden: ~~`terraform apply` (Bryan, MFA)~~ -> ~~cargar
+`db/schema.sql` contra la base~~ -> sacar el acceso temporal de CloudShell
+-> correr `scripts/seed/generar_datos.py` (Fase 2 primero).
+
+### El hallazgo de auth.uid() (2026-10-16)
+
+Al cargar `db/schema.sql` por primera vez contra la base real, las 25 tablas y
+las FKs sin `auth` entraron bien, pero **casi todas** las 21 funciones de
+permisos (`mi_academia()`, `is_director()`, etc.) y, en cadena, casi todas las
+`CREATE POLICY` fallaban con `schema "auth" does not exist` o
+`function X() does not exist`.
+
+Causa real: esas funciones son `language sql` (no `plpgsql`), y Postgres
+**valida que los objetos referenciados existan al momento de CREATE FUNCTION**,
+no recien al invocarla -- un detalle que se habia asumido al reves en una
+sesion anterior. Como usan `auth.uid()` en el cuerpo, y el schema `auth` no
+existe hasta que GoTrue corra sus migraciones (Fase 2), el `CREATE FUNCTION`
+fallaba de entrada. Las funciones que no dependen de `auth.uid()` directa o
+indirectamente (`academia_activa()`, `es_plataforma()`) si se creaban bien,
+lo que en su momento oculto el alcance real del problema.
+
+Fix aplicado: `schema.sql` ahora crea el schema `auth` y define `auth.uid()`
+el mismo (la implementacion real que usa Supabase/PostgREST -- lee el claim
+`sub` del JWT via `current_setting('request.jwt.claims', ...)`), antes de la
+seccion de tablas. No es un parche temporal: sigue siendo correcta una vez
+desplegado GoTrue/PostgREST en Fase 2. Verificado en la base real: 25 tablas,
+88 policies, 57 funciones.

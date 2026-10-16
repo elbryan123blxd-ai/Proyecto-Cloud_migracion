@@ -27,6 +27,29 @@
 create extension if not exists pgcrypto;
 
 -- =========================================================================
+-- STUB DE auth.uid() -- hallazgo 2026-10-16
+-- =========================================================================
+-- Las 21 funciones de permisos (mi_academia(), is_director(), etc.) usan
+-- auth.uid() en su cuerpo. Como son `language sql` (no plpgsql), Postgres
+-- VALIDA que auth.uid() exista EN EL MOMENTO DE CREAR la funcion, no recien
+-- al invocarla. Sin esto, el CREATE FUNCTION de practicamente todas fallaba
+-- con "schema auth does not exist", y en cadena tumbaba tambien casi todas
+-- las CREATE POLICY (dependen de esas funciones).
+--
+-- Esta es la implementacion REAL que usa Supabase/PostgREST (lee el claim
+-- "sub" del JWT que PostgREST expone en la variable de sesion
+-- request.jwt.claims), no un parche temporal -- sigue siendo correcta una
+-- vez que GoTrue/PostgREST esten desplegados (Fase 2). Mientras no haya
+-- JWT (nadie autenticado todavia), devuelve NULL de forma segura.
+create schema if not exists auth;
+
+create or replace function auth.uid() returns uuid
+  language sql stable
+as $$
+  select nullif(current_setting('request.jwt.claims', true)::json->>'sub', '')::uuid
+$$;
+
+-- =========================================================================
 -- TABLAS (sin referencias cruzadas todavia -- van todas al final)
 -- =========================================================================
 

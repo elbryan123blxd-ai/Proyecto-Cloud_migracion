@@ -75,8 +75,15 @@ pausar como Aurora Serverless v2), y casi $0 con el entorno apagado salvo por la
       RDS PostgreSQL (`academia-premier-db`, Postgres 15.19, `db.t4g.micro` --
       cambiado desde Aurora Serverless v2 por restriccion del free tier, ver
       CLAUDE.md), Secrets Manager. Confirmado en consola, us-east-2
-- [ ] Cargar esquema + datos generados -- pendiente resolver como conectarse
-      (la base no tiene IP publica a proposito)
+- [x] Cargar `db/schema.sql` contra la base -- hecho 2026-10-16 via CloudShell
+      (VPC environment) con IP privada directa. 25 tablas, 88 policies RLS,
+      57 funciones (21 propias + extensiones) confirmadas en la base real.
+      Hallazgo en el camino: las funciones de permisos usan `auth.uid()`, que
+      no existia hasta crear un stub real en `schema.sql` -- ver CLAUDE.md
+- [ ] Correr `scripts/seed/generar_datos.py` (requiere GoTrue, Fase 2)
+- [ ] Sacar el acceso temporal de CloudShell a la base
+      (`terraform/red-y-base/temporal-acceso-schema.tf`) -- preparado, falta
+      que Bryan corra `terraform apply`
 
 ### Fase 2 - El Supabase propio
 - [ ] Cluster ECS Fargate
