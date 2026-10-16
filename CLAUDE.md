@@ -234,9 +234,8 @@ apuntando a esto.
       (VPC environment), IP privada directa (`10.0.10.206`). Confirmado: 25
       tablas, 88 policies RLS, 57 funciones (21 propias + extensiones). Ver
       "El hallazgo de auth.uid()" abajo
-- [ ] Sacar el acceso temporal de CloudShell a la base (**siguiente paso real**,
-      ver `terraform/red-y-base/temporal-acceso-schema.tf` -- preparado para
-      borrar, falta correr `terraform apply`)
+- [x] Acceso temporal de CloudShell a la base, cerrado -- `terraform apply`
+      corrido 2026-10-16, `temporal-acceso-schema.tf` borrado del repo
 - [ ] Correr `scripts/seed/generar_datos.py` (despues de GoTrue, Fase 2)
 - [ ] Prueba de carga real (60 admins + 30k alumnos en 3 oleadas) -- ver Fase 5 en
       `docs/PLAN.md`, requiere Fases 1-4 completas primero
@@ -284,8 +283,9 @@ justamente lo que la prueba de carga de la Fase 5 deberia determinar, no algo qu
 pueda calcular solo en teoria.
 
 Pendiente, en ese orden: ~~`terraform apply` (Bryan, MFA)~~ -> ~~cargar
-`db/schema.sql` contra la base~~ -> sacar el acceso temporal de CloudShell
--> correr `scripts/seed/generar_datos.py` (Fase 2 primero).
+`db/schema.sql` contra la base~~ -> ~~sacar el acceso temporal de
+CloudShell~~ -> Fase 2 (ECS Fargate + GoTrue + PostgREST + ALB) -> correr
+`scripts/seed/generar_datos.py`.
 
 ### El hallazgo de auth.uid() (2026-10-16)
 
@@ -310,3 +310,87 @@ el mismo (la implementacion real que usa Supabase/PostgREST -- lee el claim
 seccion de tablas. No es un parche temporal: sigue siendo correcta una vez
 desplegado GoTrue/PostgREST en Fase 2. Verificado en la base real: 25 tablas,
 88 policies, 57 funciones.
+
+## El modulo de Fase 2 (`terraform/supabase-propio/`)
+
+Escrito y validado con `terraform validate` el 2026-10-16 (sin `apply` --
+ver "Como aplicarlo" abajo). Backend `s3`, misma key del bootstrap, otra
+`key` (`supabase-propio/terraform.tfstate`). Lee la VPC/subredes/security
+groups/secreto de Aurora de Fase 1 via `terraform_remote_state`, nunca
+copiados a mano. Crea:
+
+- **ECR** (`ecr.tf`): un repo privado cada uno para GoTrue y PostgREST.
+  Por que no Docker Hub directo: las tareas de Fargate viven en subred
+  privada, sin NAT ni Internet Gateway en su ruta -- el unico camino para
+  bajar una imagen es el VPC Endpoint de ECR, preparado desde Fase 1.
+  Terraform solo crea el repo vacio; el `docker push` es manual (ver abajo).
+- **Secrets Manager** (`secrets.tf`): JWT secret (lo comparten GoTrue y
+  PostgREST, uno firma, el otro valida) y credenciales del rol
+  `authenticator` que usa PostgREST -- **no** el master de Aurora. Las URLs
+  de conexion completas (`postgres://...`) se arman aca mismo con
+  `jsondecode()` del secreto de Aurora de Fase 1, nunca se repite la
+  password del master a mano.
+- **ECS Fargate** (`ecs.tf`): un cluster, una task definition y un service
+  por cada servicio (GoTrue 9999, PostgREST 3000). `256` CPU / `512` MB cada
+  uno (minimo de Fargate) -- es el clon, sin trafico real. `lifecycle.ignore_changes = [desired_count]`
+  en los dos services porque quien manda en el numero de tareas despues del
+  primer apply es el auto-scaling (`autoscaling.tf`), no Terraform.
+- **ALB** (`alb.tf`): **un solo** ALB, pero con **2 listeners HTTP** (puerto
+  80 -> PostgREST, puerto 8081 -> GoTrue) en vez de 1 listener con reglas por
+  path. Motivo: un ALB comun no reescribe el path de un pedido -- eso lo hace
+  Kong en el Supabase real (`/auth/v1/token` -> le saca el prefijo y se lo
+  manda a GoTrue en `/token`). Replicar Kong esta fuera de alcance de este
+  clon (igual que answer_sheets/OCR), asi que se separa por **puerto** en vez
+  de por path. Sin HTTPS todavia -- no hay dominio propio (llega en Fase 3
+  con Amplify/CloudFront), y ACM gratis necesita un dominio real para validar
+  el certificado. `network.tf` de Fase 1 se actualizo con ingress 80/8081 en
+  `sg-alb` para esto (443 sigue preparado para cuando haya dominio).
+- **S3** (`s3.tf`): un bucket privado para archivos. Sin servicio
+  intermedio tipo "storage-api" de Supabase -- las apps Next.js (Fase 3) le
+  hablan directo via SDK, fuera de alcance de este clon.
+- **Auto-scaling** (`autoscaling.tf`): un target tracking por servicio,
+  CPU al 60%, min 1 / max 3 tareas. Es lo que la prueba de carga de Fase 5
+  tiene que grabar reaccionando en vivo.
+
+### Roles de Postgres que hacen falta (`db/post-gotrue-roles.sql`)
+
+Supabase Cloud los crea solos al armar un proyecto nuevo -- aca no, hay que
+correrlos a mano UNA VEZ (mismo patron que `db/post-gotrue-fks.sql`):
+`anon`, `authenticated`, `service_role` (los 3 "modos" con los que PostgREST
+puede atender un pedido segun el JWT) y `authenticator` (el rol con el que
+PostgREST se conecta de verdad, con la password que genero Terraform en
+`secrets.tf`). Sin esto, PostgREST arranca pero falla cada conexion con
+"role authenticator does not exist".
+
+### Como aplicarlo (orden, por la dependencia circular imagen <-> service)
+
+Un ECS service con `desired_count >= 1` no termina de aplicar si la imagen
+que pide todavia no existe en ECR (Terraform espera a que el service
+estabilice y hace timeout). Por eso el apply va **en 2 pasos**, no de una:
+
+1. **Paso 1 -- solo ECR y los secretos:**
+   ```
+   terraform apply -target=aws_ecr_repository.gotrue -target=aws_ecr_repository.postgrest -target=aws_secretsmanager_secret_version.authenticator
+   ```
+2. **Subir las imagenes oficiales** (desde una maquina con Docker y la
+   sesion de AWS activa):
+   ```
+   aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin <cuenta>.dkr.ecr.us-east-2.amazonaws.com
+
+   docker pull supabase/gotrue:latest
+   docker tag supabase/gotrue:latest $(terraform output -raw ecr_gotrue_url):latest
+   docker push $(terraform output -raw ecr_gotrue_url):latest
+
+   docker pull postgrest/postgrest:latest
+   docker tag postgrest/postgrest:latest $(terraform output -raw ecr_postgrest_url):latest
+   docker push $(terraform output -raw ecr_postgrest_url):latest
+   ```
+3. **Correr `db/post-gotrue-roles.sql`** contra la base (password del rol
+   `authenticator` desde Secrets Manager, mismo patron que la password de
+   Aurora -- ver el script para el comando exacto).
+4. **Paso 2 -- el resto:**
+   ```
+   terraform apply
+   ```
+   Ahora la imagen ya existe en ECR y el rol `authenticator` ya existe en
+   Postgres, asi que los 2 services deberian estabilizar sin reintentos.

@@ -86,11 +86,18 @@ pausar como Aurora Serverless v2), y casi $0 con el entorno apagado salvo por la
       que Bryan corra `terraform apply`
 
 ### Fase 2 - El Supabase propio
-- [ ] Cluster ECS Fargate
-- [ ] GoTrue (auth)
-- [ ] PostgREST (API)
-- [ ] S3 para archivos
-- [ ] Un solo ALB al frente
+- [x] Modulo `terraform/supabase-propio/` escrito y validado (`terraform validate`,
+      2026-10-16) -- cluster ECS Fargate, task definitions de GoTrue y
+      PostgREST, ALB con 2 listeners (80 PostgREST, 8081 GoTrue -- sin path
+      rewrite, ver CLAUDE.md), ECR, Secrets Manager (JWT + rol authenticator),
+      S3, auto-scaling por CPU. Falta aplicarlo (Bryan, MFA)
+- [ ] `terraform apply` en 2 pasos (ECR + secretos primero, imagen y roles de
+      Postgres en el medio, despues el resto) -- ver secuencia en CLAUDE.md
+- [ ] Subir las imagenes oficiales de GoTrue y PostgREST a ECR (`docker push`)
+- [ ] Correr `db/post-gotrue-roles.sql` (roles `anon`/`authenticated`/
+      `service_role`/`authenticator`) y `db/post-gotrue-fks.sql` (FKs a
+      `auth.users`, esperaban que GoTrue corriera sus migraciones)
+- [ ] Verificar que GoTrue y PostgREST levantan sanos (health checks del ALB en verde)
 
 ### Fase 3 - Las apps
 - [ ] Desplegar las apps Next.js

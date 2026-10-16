@@ -108,9 +108,29 @@ resource "aws_security_group" "alb" {
   vpc_id      = aws_vpc.principal.id
 
   ingress {
-    description = "HTTPS desde Internet (cualquiera)"
+    description = "HTTPS desde Internet (cualquiera) -- preparado para cuando haya dominio + certificado ACM, Fase 3"
     from_port   = 443
     to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Fase 2, mientras no hay dominio propio: HTTP en dos puertos, uno por
+  # listener (ver terraform/supabase-propio/alb.tf). No es ruteo por path
+  # -- el ALB no reescribe paths como Kong en el Supabase real -- es ruteo
+  # por PUERTO: 80 = PostgREST (la API), 8081 = GoTrue (auth).
+  ingress {
+    description = "HTTP -- listener de PostgREST (Fase 2, sin dominio/HTTPS todavia)"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTP -- listener de GoTrue (Fase 2, sin dominio/HTTPS todavia)"
+    from_port   = 8081
+    to_port     = 8081
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
