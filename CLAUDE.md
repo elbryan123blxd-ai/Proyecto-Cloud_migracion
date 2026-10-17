@@ -110,7 +110,7 @@ Los tres gastos que funden creditos sin avisar:
 |---|---|---|
 | NAT Gateway | ~$32/mes | No se usa. VPC Endpoints o subredes publicas con security groups cerrados |
 | Load Balancer | ~$17/mes | Uno solo para todos los servicios |
-| Base encendida 24/7 | ~$13-43/mes | Antes: Aurora Serverless v2 escala a 0. Ahora: RDS normal no puede escalar a 0. Se arranco con `db.t4g.micro` (~$12-16/mes), subida a `db.t4g.small` (~$25-30/mes) el 2026-10-17 -- la micro se quedo sin creditos de CPU en vivo probando el dashboard real (ver "Fase 3 -- en curso") |
+| Base encendida 24/7 | ~$13-43/mes | Antes: Aurora Serverless v2 escala a 0. Ahora: RDS normal no puede escalar a 0 -- sigue en `db.t4g.micro` (~$12-16/mes). Se intento subir a `db.t4g.small` el 2026-10-17 (la micro se quedo sin creditos de CPU en vivo), pero la cuenta lo rechazo (`FreeTierRestrictionError`, tercera restriccion confirmada de este plan -- las otras dos: Aurora sin VPC propia, sin SSO). El fix real: indices (gratis), ver "Fase 3 -- en curso" |
 
 Objetivo: **$48-60/mes con todo arriba** (subio desde los $35-50 originales -- la base ya
 no se puede pausar), cerca de $0 con el entorno apagado salvo por la base (fija, no se
@@ -609,13 +609,33 @@ tiene un pozo limitado de creditos de CPU, y toda la actividad de la sesion
 Una vez en cero, el rendimiento cae al minimo garantizado -- muy poco para
 atender ~10-15 pedidos en paralelo que dispara el dashboard al cargar.
 
-**Fix:** `db.t4g.micro` -> `db.t4g.small` (duplica memoria y creditos base),
-mas `apply_immediately = true` en `aws_db_instance.db` (sin eso, el cambio de
-tamano se programa para la ventana de mantenimiento en vez de aplicarse ya --
-no hay trafico real que proteger esperando). Sube el costo de ~$13 a
-~$25-30/mes.
+**Primer intento de fix (fallo):** `db.t4g.micro` -> `db.t4g.small`. La
+cuenta lo rechazo con `FreeTierRestrictionError: This instance size isn't
+available with free plan accounts` -- **tercera restriccion confirmada** de
+esta cuenta "Ready Set Build" (las otras dos: Aurora sin VPC propia, sin
+SSO). Revertido a `db.t4g.micro` en `variables.tf`. Queda igual
+`apply_immediately = true` en `aws_db_instance.db` (util para futuros
+cambios de verdad permitidos, sin esperar ventana de mantenimiento).
+
+**Fix real (gratis): indices.** `db/schema.sql` **no tenia ni un solo
+indice** -- ni en `academia_id` (la columna que las 88 policies de RLS
+revisan en CADA fila, via `mi_academia()`), ni en ninguna FK. Con 30.000
+alumnos, cada consulta forzaba un recorrido completo de la tabla. Un indice
+no consume CPU extra (es espacio en disco, centavos) -- mas barato y mas
+efectivo que subir el tamano de instancia, que ademas no esta permitido.
+Nuevo script `db/indices-rendimiento.sql`: 21 indices en `academia_id` (uno
+por tabla multi-tenant) + 2 en `user_id` (las funciones de auth,
+`mi_puesto()`/`mis_salones()`, buscan por ahi en cada pedido) + 22 en
+llaves foraneas usadas en JOINs (Postgres no crea indice automatico para el
+lado "muchos" de una FK). Separado de `db/schema.sql` a proposito: ese
+archivo es la foto exportada de la Supabase real, y si a produccion
+tampoco le pusieron estos indices es un hallazgo aparte para Bryan, no
+algo que este repo deba "arreglar" silenciosamente ahi.
 
 Esto **confirma en vivo**, con metricas reales, algo que ya estaba anotado
 como sospecha en `rds.tf` desde Fase 1: que `db.t4g.micro` no aguantaria el
-escenario real de 30k alumnos. Buen material para el video -- no es una
-suposicion, es una prueba con numeros.
+escenario real de 30k alumnos -- y de paso encontro un problema de verdad
+(la falta de indices) que estaba ahi desde el principio, no solo en este
+clon. Buen material para el video: no es una suposicion, es una prueba con
+numeros, y la cuenta "Ready Set Build" ya va 3 veces sorprendiendo con
+restricciones no documentadas de antemano.

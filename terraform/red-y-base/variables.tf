@@ -17,7 +17,7 @@ variable "subredes_privadas_cidr" {
 }
 
 variable "db_instance_class" {
-  description = "Tamano de la instancia RDS. db.t4g.micro se quedo sin creditos de CPU en vivo (2026-10-17, probando Fase 3 con el dashboard real: CPUCreditBalance en 0, CPUUtilization pegado al 99%, PostgREST tirando 'Timed out acquiring connection from pool') -- subida a db.t4g.small para tener margen durante las pruebas. Para produccion real con 30k alumnos haria falta una instancia bastante mas grande todavia, ver rds.tf"
+  description = "Tamano de la instancia RDS. db.t4g.micro se quedo sin creditos de CPU en vivo (2026-10-17, ver rds.tf) -- se intento subir a db.t4g.small, pero la cuenta 'Ready Set Build' lo rechazo con FreeTierRestrictionError: 'This instance size isn't available with free plan accounts'. Tercera restriccion confirmada de este plan (las otras dos: Aurora sin VPC propia, sin SSO). Vuelve a micro, el fix real es agregar indices (gratis) en vez de mas CPU (no permitido)."
   type        = string
-  default     = "db.t4g.small"
+  default     = "db.t4g.micro"
 }
