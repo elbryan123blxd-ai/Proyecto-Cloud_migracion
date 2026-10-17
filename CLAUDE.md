@@ -269,6 +269,37 @@ Backend `s3` apuntando al bootstrap. Crea:
 - **Secrets Manager**: usuario/password/host/puerto de la base, generados por
   Terraform (`random_password`), nunca escritos a mano.
 
+### Trampa: reglas inline + `aws_security_group_rule` en el mismo grupo
+
+Los security groups de `network.tf` declaran sus reglas **inline** (bloques
+`ingress {}` / `egress {}` adentro del recurso). Un `aws_security_group` con
+bloques inline se considera dueño de **todas** las reglas del grupo: en cada
+apply revoca lo que no este declarado ahi adentro. Por eso, cada vez que se
+agrego el acceso temporal de CloudShell como un recurso **aparte**
+(`aws_security_group_rule`), pasaron estas tres cosas:
+
+1. **Ruido en todos los planes.** `sg-aurora` y `sg-vpc-endpoints` aparecen
+   como "update in-place" en CADA apply, aunque no se hayan tocado (es el
+   egress vacio que se vuelve a "fijar").
+2. **La regla temporal se caia sola.** Cualquier apply que tocara
+   `sg-aurora` por otro motivo la revocaba sin pedirlo -- paso 3 o 4 veces,
+   siempre hubo que volver a agregarla.
+3. **Un apply fallado de verdad** (2026-10-17): Terraform borro la regla
+   con el recurso standalone y acto seguido el `aws_security_group` intento
+   borrar la misma regla otra vez -> `InvalidPermission.NotFound: The
+   specified rule does not exist in this security group`. El estado real en
+   AWS quedo bien (la regla si se borro); el segundo apply converge solo.
+
+**Como hacerlo la proxima vez:** no mezclar los dos estilos. Si hace falta
+una regla temporal en `sg-aurora`, agregarla como un bloque `ingress {}`
+**inline mas**, comentado/descomentado en `network.tf`, en vez de crear un
+`aws_security_group_rule` suelto. Mismo esfuerzo, sin ninguno de los tres
+problemas de arriba. (La otra salida -- pasar todo a
+`aws_vpc_security_group_ingress_rule`, el estilo moderno del provider -- no
+sirve tal cual aca: el egress deny-all de `sg-aurora`/`sg-vpc-endpoints`
+depende justamente del bloque `egress {}` vacio inline, que no tiene
+equivalente standalone.)
+
 ### Por que RDS normal y no Aurora Serverless v2
 
 El plan original era Aurora Serverless v2 (escala a 0). El primer `terraform apply`
