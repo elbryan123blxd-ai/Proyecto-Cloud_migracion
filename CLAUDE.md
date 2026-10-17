@@ -99,7 +99,54 @@ usuario y no se conoce de antemano el set completo de servicios a tocar (decisio
 consciente, no por descuido — justificable en una cuenta personal de practica, no en un
 entorno de equipo).
 
+### Migracion a una cuenta con tarjeta (decidido 2026-10-17, en curso)
+
+**Por que:** la cuenta "Ready Set Build" fue imponiendo restricciones que bloquearon
+decisiones de arquitectura legitimas, no solo precio -- ya van 3 confirmadas (Aurora sin
+VPC propia, sin SSO, y el 2026-10-17 tambien se bloqueo subir el tamano de instancia de
+RDS con `FreeTierRestrictionError`). Esa ultima aparecio probando el dashboard real: la
+base (`db.t4g.micro`, burstable) se quedo sin creditos de CPU bajo la carga concurrente
+normal de la app (confirmado con metricas reales de CloudWatch -- ver "Fase 3" mas abajo),
+y el plan free no deja subir de tamano para resolverlo. Se agregaron indices (gratis, ayudo
+en parte) pero la limitacion de fondo seguia ahi, sin forma de resolverla dentro de este
+plan.
+
+**Decision:** crear una cuenta de AWS nueva, con tarjeta real cargada (aprovechando los
+creditos de bienvenida para cuentas nuevas), y migrar todo ahi. Cuenta y tarjeta las carga
+Bryan directo en aws.amazon.com -- el agente nunca las toca ni las ve.
+
+**Que NO hay que rehacer:** todo el Terraform, el schema SQL, los scripts de datos y los
+hallazgos ya quedan incorporados al codigo (el stub de `auth.uid()`, el egress a la prefix
+list de S3, el rol `postgres` para GoTrue, los indices de rendimiento, las CloudFront
+Functions de CORS, etc.) -- aplicar estos mismos modulos contra la cuenta nueva deberia ir
+mucho mas rapido que la primera vez, porque ya no hay que *descubrir* estos problemas, solo
+desplegar codigo que ya los tiene resueltos.
+
+**Que SI cambia con la cuenta nueva:**
+- Vuelve a estar disponible **Aurora Serverless v2 con VPC propia** (el plan original,
+  descartado en Fase 1 por la restriccion del free tier) -- a evaluar si se retoma en vez
+  de RDS normal.
+- Se puede elegir el tamano de instancia que haga falta, sin bloqueos.
+- El presupuesto deja de ser "creditos gratis que si se acaban, se acaban sin costo" y pasa
+  a ser **dinero real con tarjeta real** -- la disciplina de costo (sin NAT Gateway, un solo
+  ALB, `terraform destroy` al terminar sesiones largas) importa mas, no menos, a partir de
+  ahora.
+- Puede que la restriccion de SSO desaparezca tambien (esa restriccion especifica era por
+  pertenecer a una Organization de AWS ajena, propia del programa de creditos -- una cuenta
+  nueva armada directo por Bryan no deberia tenerla, a confirmar).
+
+**Estado (2026-10-17, tarde):** cuenta nueva en proceso de creacion. Hasta que este lista y
+el usuario IAM + MFA esten armados ahi, todo lo de este documento referido a "la cuenta" o
+`780017222841` sigue describiendo la cuenta vieja ("Ready Set Build") -- actualizar esta
+seccion con el numero de cuenta nuevo y marcar como completa la migracion cuando corresponda.
+
 ## Presupuesto
+
+> Esta seccion describe la cuenta "Ready Set Build" (vieja). Con la migracion de arriba,
+> el presupuesto pasa a ser tarjeta real + los creditos de bienvenida de la cuenta nueva --
+> actualizar estos numeros cuando la migracion este confirmada. La disciplina de costo
+> (evitar NAT Gateway, un solo ALB, instancia de base chica, destruir al terminar) sigue
+> aplicando igual, ahora con mas razon.
 
 ~$180 USD de creditos AWS, vencen aprox. 180 dias desde el alta de la cuenta (ver fecha
 real en la consola, Billing). Se agotan sin reembolso.

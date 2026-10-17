@@ -31,6 +31,16 @@ La arquitectura es serverless donde suma y administrada donde hace falta.
 
 Ya existe un proyecto propio con EKS, ArgoCD y Argo Rollouts. Repetirlo no agrega nada.
 
+### Cuenta AWS: migrando a una con tarjeta (decidido 2026-10-17)
+
+La cuenta "Ready Set Build" (free tier) fue bloqueando decisiones de arquitectura, no solo
+presupuesto: Aurora sin VPC propia, sin SSO, y no deja subir el tamano de instancia de RDS
+-- esto ultimo se volvio un problema real probando el dashboard: la base se quedo sin
+creditos de CPU bajo carga normal y no hay forma de agrandarla en este plan. Decision: una
+cuenta nueva, con tarjeta real. El Terraform ya escrito (con todos los hallazgos
+incorporados) se vuelve a aplicar ahi, mucho mas rapido que la primera vez. Detalle
+completo en `CLAUDE.md` -> "Migracion a una cuenta con tarjeta".
+
 ## Presupuesto
 
 Creditos AWS: **$160**, vencen el **2027-04-13**.
@@ -49,6 +59,10 @@ pausar como Aurora Serverless v2), y casi $0 con el entorno apagado salvo por la
 ## Fases
 
 ### Fase 0 - Fundaciones (sin costo)
+- [ ] Migrar a una cuenta de AWS con tarjeta real (en curso, 2026-10-17) --
+      ver "Cuenta AWS: migrando a una con tarjeta" arriba. Hasta que esto
+      este listo, el resto de esta lista sigue describiendo la cuenta
+      vieja "Ready Set Build"
 - [x] AWS Budget con alerta a $50 y a $100
 - [x] Acceso a AWS sin claves permanentes en uso (IAM user + MFA + sesion
       temporal, no SSO -- la cuenta "Ready Set Build" no lo soporta) --
