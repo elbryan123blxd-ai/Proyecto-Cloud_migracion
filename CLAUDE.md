@@ -242,7 +242,11 @@ apuntando a esto.
       "El hallazgo de auth.uid()" abajo
 - [x] Acceso temporal de CloudShell a la base, cerrado -- `terraform apply`
       corrido 2026-10-16, `temporal-acceso-schema.tf` borrado del repo
-- [ ] Correr `scripts/seed/generar_datos.py` (despues de GoTrue, Fase 2)
+- [x] Fase 2 completa 2026-10-17: GoTrue y PostgREST corriendo en ECS
+      Fargate, subred privada, verificados en vivo atras del ALB (ver "El
+      modulo de Fase 2" mas abajo)
+- [ ] Correr `scripts/seed/generar_datos.py` -- **siguiente paso real**,
+      GoTrue ya existe, ya se puede insertar en `auth.users`
 - [ ] Prueba de carga real (60 admins + 30k alumnos en 3 oleadas) -- ver Fase 5 en
       `docs/PLAN.md`, requiere Fases 1-4 completas primero
 
@@ -290,8 +294,8 @@ pueda calcular solo en teoria.
 
 Pendiente, en ese orden: ~~`terraform apply` (Bryan, MFA)~~ -> ~~cargar
 `db/schema.sql` contra la base~~ -> ~~sacar el acceso temporal de
-CloudShell~~ -> Fase 2 (ECS Fargate + GoTrue + PostgREST + ALB) -> correr
-`scripts/seed/generar_datos.py`.
+CloudShell~~ -> ~~Fase 2 (ECS Fargate + GoTrue + PostgREST + ALB)~~ ->
+correr `scripts/seed/generar_datos.py`.
 
 ### El hallazgo de auth.uid() (2026-10-16)
 
@@ -427,3 +431,52 @@ tal cual el diseno original -- el pivot a subred publica no hacia falta.
 las IPs reales del servicio. Es una distincion que vale la pena explicar:
 mucha gente arma el VPC Endpoint y da por sentado que "ya no hace falta
 tocar el security group", y no es asi.
+
+**Efecto colateral bueno:** como se volvio a subred privada, los VPC
+Interface Endpoints de Fase 1 (`ecr.api`, `ecr.dkr`, `secretsmanager`,
+`logs`) terminaron usandose de verdad -- no quedo nada pagado sin
+proposito.
+
+### GoTrue necesitaba el rol `postgres` (2026-10-17)
+
+Con el pull ya arreglado, GoTrue arrancaba pero moria en bucle: una
+migracion propia (`20240612123726_enable_rls_update_grants`) asume que
+existe un rol de Postgres llamado literalmente `postgres` (la convencion
+real de Supabase -- el superusuario de cualquier proyecto Supabase se
+llama asi siempre). Esta base usa `academia_premier_admin` como master
+(decision de Fase 1), asi que ese rol nunca existio. Fix: `create role
+postgres;` (sin login, sin ser superusuario -- la migracion solo le
+otorga SELECT con grant option sobre las tablas de `auth`), nuevo script
+`db/gotrue-postgres-role.sql`. Con eso GoTrue corrio sus 19 migraciones
+solo y quedo arriba (`GoTrue API started on: 0.0.0.0:9999`).
+
+### La password del `authenticator` no coincidia (2026-10-17)
+
+Con GoTrue arriba, PostgREST fallaba con `password authentication failed
+for user "authenticator"`. Causa: un error de transcripcion mio (Claude)
+leyendo una captura de pantalla con la password generada por Terraform --
+lei `...By8P...` (ocho) donde en realidad decia `...ByBP...` (be), son
+muy parecidos en esa fuente. `db/post-gotrue-roles.sql` se habia corrido
+con el valor mal transcripto, asi que el rol en la base nunca coincidio
+con el secreto real que usa `secrets.tf`. Fix: `ALTER ROLE authenticator
+WITH PASSWORD '...'` contra el valor REAL, pescado fresco de Secrets
+Manager (nunca retipeado a mano, copiado/pegado directo del comando).
+
+**Leccion:** cuando una password larga se transcribe a mano (de una
+captura, de memoria, etc.), un solo caracter mal leido rompe todo sin dar
+ningun error claro al momento de "crear" -- `CREATE ROLE` no valida que
+la password sea la correcta, solo la guarda. El error aparece recien
+despues, en quien intenta loguearse con el valor real. Mejor habito:
+siempre copiar/pegar el valor fresco de Secrets Manager en el momento de
+usarlo, nunca reescribirlo de una nota o una lectura visual.
+
+### Fase 2: COMPLETA Y VERIFICADA (2026-10-17)
+
+GoTrue y PostgREST corriendo, ambos en subred privada (diseno original),
+autenticados contra la base real, respondiendo atras del ALB:
+- `curl http://<alb-dns>:8081/health` -> `{"version":"v2.187.0","name":"GoTrue",...}`
+- `curl http://<alb-dns>:80/` -> 200 OK, esquema OpenAPI completo (137KB)
+
+Pendiente real de Fase 2: ninguno. Lo que sigue es Fase 3 (desplegar las
+apps Next.js) o, antes, correr `scripts/seed/generar_datos.py` (ahora que
+GoTrue existe, ya se puede insertar en `auth.users`).

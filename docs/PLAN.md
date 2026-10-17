@@ -87,19 +87,30 @@ pausar como Aurora Serverless v2), y casi $0 con el entorno apagado salvo por la
       (`terraform/red-y-base/temporal-acceso-schema.tf`) -- preparado, falta
       que Bryan corra `terraform apply`
 
-### Fase 2 - El Supabase propio
-- [x] Modulo `terraform/supabase-propio/` escrito y validado (`terraform validate`,
-      2026-10-16) -- cluster ECS Fargate, task definitions de GoTrue y
-      PostgREST, ALB con 2 listeners (80 PostgREST, 8081 GoTrue -- sin path
-      rewrite, ver CLAUDE.md), ECR, Secrets Manager (JWT + rol authenticator),
-      S3, auto-scaling por CPU. Falta aplicarlo (Bryan, MFA)
-- [ ] `terraform apply` en 2 pasos (ECR + secretos primero, imagen y roles de
-      Postgres en el medio, despues el resto) -- ver secuencia en CLAUDE.md
-- [ ] Subir las imagenes oficiales de GoTrue y PostgREST a ECR (`docker push`)
-- [ ] Correr `db/post-gotrue-roles.sql` (roles `anon`/`authenticated`/
-      `service_role`/`authenticator`) y `db/post-gotrue-fks.sql` (FKs a
-      `auth.users`, esperaban que GoTrue corriera sus migraciones)
-- [ ] Verificar que GoTrue y PostgREST levantan sanos (health checks del ALB en verde)
+### Fase 2 - El Supabase propio -- COMPLETA 2026-10-17
+- [x] Modulo `terraform/supabase-propio/` -- cluster ECS Fargate, task
+      definitions de GoTrue y PostgREST, ALB con 2 listeners (80 PostgREST,
+      8081 GoTrue -- sin path rewrite, ver CLAUDE.md), ECR, Secrets Manager
+      (JWT + rol authenticator), S3, auto-scaling por CPU. Aplicado, ambos
+      servicios en subred privada (el plan original, sin NAT)
+- [x] Imagenes oficiales de GoTrue (`v2.187.0`, no hay `:latest` en Docker
+      Hub) y PostgREST (`:latest`) subidas a ECR
+- [x] `db/post-gotrue-roles.sql`, `db/gotrue-postgres-role.sql` (rol
+      `postgres` que pide una migracion propia de GoTrue) y
+      `db/post-gotrue-fks.sql` corridos contra la base real
+- [x] GoTrue y PostgREST verificados en vivo atras del ALB: `/health` en
+      GoTrue (puerto 8081) y el esquema OpenAPI completo en PostgREST
+      (puerto 80) responden 200 OK
+
+**Hallazgo central de esta fase** (detalle completo en CLAUDE.md): el
+primer intento de GoTrue para bajar su imagen de ECR fallaba por timeout.
+Se sospecho mal -- DNS privada de los VPC Endpoints -- y se probo hasta
+mover los servicios a subred publica (revertido). La causa real: ECR
+guarda las capas de las imagenes en S3, y el Gateway Endpoint de S3 usa
+IPs publicas como destino (solo cambia el ruteo, nunca el DNS) -- el
+security group de los servicios no dejaba salir hacia esas IPs. Fix de una
+linea (agregar la prefix list de S3 al egress), sin moverse de subred
+privada.
 
 ### Fase 3 - Las apps
 - [ ] Desplegar las apps Next.js
