@@ -51,10 +51,16 @@ resource "aws_ecs_task_definition" "gotrue" {
         { name = "GOTRUE_API_HOST", value = "0.0.0.0" },
         { name = "PORT", value = "9999" },
         { name = "GOTRUE_DB_DRIVER", value = "postgres" },
-        # Sin dominio propio todavia (Fase 3) -- estos dos apuntan al ALB por
-        # su DNS name publico, en el puerto del listener de GoTrue (8081)
-        { name = "API_EXTERNAL_URL", value = "http://${aws_lb.principal.dns_name}:8081" },
-        { name = "GOTRUE_SITE_URL", value = "http://${aws_lb.principal.dns_name}:8081" },
+        # Apuntan a CloudFront (ver cloudfront.tf), no al ALB: es la URL
+        # publica HTTPS que ven las apps y los navegadores. API_EXTERNAL_URL
+        # lleva el prefijo /auth/v1 porque es como GoTrue arma los enlaces
+        # que manda hacia afuera, igual que en el Supabase real.
+        { name = "API_EXTERNAL_URL", value = "https://${aws_cloudfront_distribution.api.domain_name}/auth/v1" },
+        # SITE_URL es a donde vuelve el usuario despues de un enlace de
+        # correo. Deberia ser la URL de la app (Amplify, Fase 3) -- por
+        # ahora apunta a CloudFront. Con GOTRUE_MAILER_AUTOCONFIRM=true no
+        # se manda ningun correo, asi que todavia no molesta.
+        { name = "GOTRUE_SITE_URL", value = "https://${aws_cloudfront_distribution.api.domain_name}" },
         { name = "GOTRUE_URI_ALLOW_LIST", value = "*" }, # clon de portfolio, sin frontend real todavia -- se acota en Fase 3
         { name = "GOTRUE_DISABLE_SIGNUP", value = "false" },
         { name = "GOTRUE_JWT_AUD", value = "authenticated" },
