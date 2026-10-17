@@ -64,5 +64,12 @@ resource "aws_db_instance" "db" {
   backup_retention_period = 1    # minimo posible: este clon no necesita retencion larga de backups
   deletion_protection     = false
 
+  # Sin esto, un cambio de instance_class (como el de hoy, micro -> small)
+  # se programa para la "ventana de mantenimiento" en vez de aplicarse ya --
+  # tiene sentido en produccion real (evita un corte en horario pico), pero
+  # acá no hay trafico real que proteger, y esperar sin saber cuando corta
+  # en medio de una sesion de pruebas no sirve de nada.
+  apply_immediately = true
+
   tags = { Name = "academia-premier-db" }
 }

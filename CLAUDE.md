@@ -110,7 +110,7 @@ Los tres gastos que funden creditos sin avisar:
 |---|---|---|
 | NAT Gateway | ~$32/mes | No se usa. VPC Endpoints o subredes publicas con security groups cerrados |
 | Load Balancer | ~$17/mes | Uno solo para todos los servicios |
-| Base encendida 24/7 | ~$13-43/mes | Antes: Aurora Serverless v2 escala a 0. Ahora: RDS normal no puede escalar a 0 -- se usa la instancia mas chica posible (`db.t4g.micro`, ~$12-16/mes fijo) para mantener el impacto bajo |
+| Base encendida 24/7 | ~$13-43/mes | Antes: Aurora Serverless v2 escala a 0. Ahora: RDS normal no puede escalar a 0. Se arranco con `db.t4g.micro` (~$12-16/mes), subida a `db.t4g.small` (~$25-30/mes) el 2026-10-17 -- la micro se quedo sin creditos de CPU en vivo probando el dashboard real (ver "Fase 3 -- en curso") |
 
 Objetivo: **$48-60/mes con todo arriba** (subio desde los $35-50 originales -- la base ya
 no se puede pausar), cerca de $0 con el entorno apagado salvo por la base (fija, no se
@@ -582,32 +582,40 @@ mismo secreto que usan GoTrue/PostgREST (`scripts/generar-claves-jwt.py`,
 sin dependencias, con modo de un solo token para evitar que copiar/pegar
 un string largo a mano corrompa la firma).
 
-### Donde quedo, literal (para retomar mañana)
+### El login real funciono (2026-10-17)
 
-1. **CORS ya funciona** -- confirmado en vivo: el pedido de login llega
-   hasta GoTrue (antes el navegador ni lo mandaba, bloqueado por CORS).
-2. **GoTrue responde 500**: `{"error":"Database error querying schema"}`.
-   Es un mensaje generico de GoTrue -- esconde el error SQL real. **El
-   proximo paso es mirar los logs reales:**
-   ```
-   aws logs tail /ecs/academia-premier/gotrue --since 5m --region us-east-2
-   ```
-   (se puede correr desde la PC de Bryan directo, sin CloudShell --
-   CloudWatch Logs es una API publica)
-3. Sospecha, sin confirmar todavia: el patron de esta noche fue siempre
-   "falta algo que Supabase Cloud trae armado de fabrica y aca no" (el rol
-   `postgres`, la password mal transcripta) -- primer lugar a mirar:
-   permisos/columnas que el login necesita tocar y que capaz no estan
-   bien (alguna extension de Postgres, algun grant que falte sobre
-   `auth.*` especificamente para el flujo de login, no solo para
-   `auth.users`).
-4. Infra de esta fase ya aplicada y funcionando: CloudFront, las 2
-   CloudFront Functions, el repo clonado en
-   `Proyecto_Full_Stack2.0-clon-aws` (rama `aws-clon-fase3`, SOLO en la PC
-   de Bryan, no en este repo), `apps/dashboard/.env.local` con la URL de
-   CloudFront y la clave `anon`, `pnpm install` corrido, `pnpm dev`
-   corriendo en `localhost:3001`.
-5. Usuario de prueba para seguir probando el login una vez arreglado:
-   `millacecilia@example.net` / `Demo1234!` (director, sacado en vivo con
-   `curl` + la clave `service_role` contra PostgREST, sin tocar la base
-   directo).
+Despues de los hallazgos de las secciones anteriores (CORS, el rol `postgres`,
+las columnas de texto NULL en `auth.users`), **un director generado por el
+seed entro al dashboard real**, autenticado por GoTrue en AWS. Primer login
+de punta a punta: navegador -> CloudFront -> ALB -> GoTrue -> RDS -> JWT de
+vuelta -> dashboard renderizado con la sesion real.
+
+Usuario de prueba: `millacecilia@example.net` / `Demo1234!` (director, sacado
+en vivo con `curl` + la clave `service_role` contra PostgREST, sin tocar la
+base directo -- ver `scripts/generar-claves-jwt.py`).
+
+### El siguiente hallazgo: RDS se quedo sin creditos de CPU
+
+Con el login funcionando, el dashboard cargaba vacio ("0 alumnos" con 30.000
+reales en la base) -- `504 Gateway Timeout` en casi todos los pedidos a
+PostgREST. Los logs mostraban `PGRST003: Timed out acquiring connection from
+pool` en bucle, hasta en el health check del propio ALB.
+
+Causa confirmada con metricas reales (consola RDS -> Monitoring):
+**`CPUCreditBalance` en 0** desde las 19:30, **`CPUUtilization` pegado al
+99%** desde ese mismo momento. `db.t4g.micro` es una instancia *burstable*:
+tiene un pozo limitado de creditos de CPU, y toda la actividad de la sesion
+(cargas de esquema, 30.100 filas del seed, consultas repetidas) lo vacio.
+Una vez en cero, el rendimiento cae al minimo garantizado -- muy poco para
+atender ~10-15 pedidos en paralelo que dispara el dashboard al cargar.
+
+**Fix:** `db.t4g.micro` -> `db.t4g.small` (duplica memoria y creditos base),
+mas `apply_immediately = true` en `aws_db_instance.db` (sin eso, el cambio de
+tamano se programa para la ventana de mantenimiento en vez de aplicarse ya --
+no hay trafico real que proteger esperando). Sube el costo de ~$13 a
+~$25-30/mes.
+
+Esto **confirma en vivo**, con metricas reales, algo que ya estaba anotado
+como sospecha en `rds.tf` desde Fase 1: que `db.t4g.micro` no aguantaria el
+escenario real de 30k alumnos. Buen material para el video -- no es una
+suposicion, es una prueba con numeros.
