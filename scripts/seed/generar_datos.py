@@ -52,18 +52,31 @@ def conectar():
 
 def crear_auth_user(cur, nombre_completo, email):
     """Inserta en auth.users (schema que crea GoTrue). Columnas estandar de
-    GoTrue/Supabase Auth -- confirmar contra el schema real en Fase 2."""
+    GoTrue/Supabase Auth, confirmadas contra el schema real en Fase 2.
+
+    Las columnas de "tokens" (confirmation_token, recovery_token, etc.) se
+    mandan como '' a proposito -- GoTrue las deja asi cuando crea un
+    usuario por su propia API, nunca en NULL. Si quedan en NULL (el default
+    de la columna, al no mencionarlas en el insert), GoTrue se cae al
+    LOGUEAR a ese usuario con "Scan error ... converting NULL to string is
+    unsupported" -- encontrado en Fase 3, 2026-10-17, con los 30.100
+    usuarios del primer seed. Fix de los que ya existen:
+    db/fix-auth-users-tokens-null.sql."""
     user_id = str(uuid.uuid4())
     cur.execute(
         """
         insert into auth.users (
             instance_id, id, aud, role, email, encrypted_password,
             email_confirmed_at, created_at, updated_at,
-            raw_app_meta_data, raw_user_meta_data
+            raw_app_meta_data, raw_user_meta_data,
+            confirmation_token, recovery_token,
+            email_change_token_new, email_change_token_current,
+            phone_change_token, reauthentication_token
         ) values (
             '00000000-0000-0000-0000-000000000000', %s, 'authenticated', 'authenticated',
             %s, %s, now(), now(), now(), '{"provider":"email","providers":["email"]}',
-            %s
+            %s,
+            '', '', '', '', '', ''
         )
         """,
         (user_id, email, PASSWORD_HASH, psycopg2.extras.Json({"nombre": nombre_completo})),
