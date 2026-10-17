@@ -94,10 +94,18 @@ resource "aws_ecs_service" "gotrue" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets         = local.subredes_privadas
-    security_groups = [local.sg_servicios_id]
-    # Sin IP publica -- igual que la base, nunca es alcanzable directo desde
-    # Internet. Solo recibe trafico que ya paso por el ALB (ver network.tf).
+    # CAMBIADO 2026-10-16 -- iba en subred privada, via VPC Endpoints
+    # (ecr.api/ecr.dkr/secretsmanager/logs). El endpoint ecr.dkr resolvia
+    # por DNS publica en vez de la zona privada por una razon que no se
+    # pudo determinar (VPC/DHCP/Resolver Rules/DNS Firewall, todo
+    # descartado) -- la tarea nunca podia bajar su imagen. Se mueve a
+    # subred publica con IP publica para bajarla por Internet directo.
+    # La seguridad real no cambia: sg-servicios solo acepta trafico
+    # entrante del ALB (ver network.tf), tener IP publica no alcanza para
+    # que alguien le hable directo.
+    subnets          = local.subredes_publicas
+    security_groups  = [local.sg_servicios_id]
+    assign_public_ip = true
   }
 
   load_balancer {
@@ -173,8 +181,10 @@ resource "aws_ecs_service" "postgrest" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets         = local.subredes_privadas
-    security_groups = [local.sg_servicios_id]
+    # Mismo cambio y mismo motivo que en el service de gotrue (ver mas arriba).
+    subnets          = local.subredes_publicas
+    security_groups  = [local.sg_servicios_id]
+    assign_public_ip = true
   }
 
   load_balancer {

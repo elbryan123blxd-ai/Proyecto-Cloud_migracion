@@ -169,6 +169,21 @@ resource "aws_security_group" "servicios" {
     cidr_blocks = [var.vpc_cidr]
   }
 
+  # Agregado 2026-10-16: GoTrue/PostgREST se movieron a subred publica (ver
+  # terraform/supabase-propio/ecs.tf) porque el VPC Endpoint ecr.dkr no
+  # resolvia bien por DNS privada, sin causa clara. Bajan su imagen de ECR
+  # (y hablan con Secrets Manager/CloudWatch Logs) por Internet directo
+  # ahora -- hace falta este egress a 0.0.0.0/0 en 443 para eso. Sigue sin
+  # recibir NADA entrante salvo del ALB (ver ingress arriba) -- esto solo
+  # habilita SALIDA.
+  egress {
+    description = "HTTPS a Internet -- ECR/Secrets Manager/CloudWatch Logs por la IP publica (ver nota arriba)"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   tags = { Name = "academia-premier-sg-servicios" }
 }
 

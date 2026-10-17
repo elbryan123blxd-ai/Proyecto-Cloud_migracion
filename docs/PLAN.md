@@ -51,7 +51,9 @@ pausar como Aurora Serverless v2), y casi $0 con el entorno apagado salvo por la
 ### Fase 0 - Fundaciones (sin costo)
 - [x] AWS Budget con alerta a $50 y a $100
 - [x] Acceso a AWS sin claves permanentes en uso (IAM user + MFA + sesion
-      temporal, no SSO -- la cuenta "Ready Set Build" no lo soporta)
+      temporal, no SSO -- la cuenta "Ready Set Build" no lo soporta) --
+      el MFA nunca se habia configurado de verdad pese a estar marcado como
+      hecho; corregido y armado de cero 2026-10-16 (ver CLAUDE.md)
 - [x] Confirmar en que cuenta AWS estan los creditos -- cuenta nueva
       "Ready Set Build", solo region us-east-2 (ver CLAUDE.md)
 - [x] Exportar el esquema SQL de Supabase (solo estructura, sin datos) --

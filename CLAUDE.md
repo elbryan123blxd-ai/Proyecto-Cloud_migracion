@@ -218,7 +218,13 @@ apuntando a esto.
 
 ## Estado actual / pendientes abiertos
 
-- [x] MFA activo en el usuario IAM
+- [x] MFA activo en el usuario IAM -- estaba marcado como hecho pero nunca
+      se habia configurado de verdad (`list-mfa-devices` devolvia `[]`).
+      Armado de cero 2026-10-16 via CLI (`create-virtual-mfa-device` +
+      `enable-mfa-device`, la consola no mostraba la opcion). Verificado con
+      un `get-session-token` real. El usuario (`Bryan-Migracion`) sigue
+      teniendo 2 Access Keys permanentes -- pendiente evaluar borrar la que
+      no se usa
 - [x] Schema SQL (`db/schema.sql`)
 - [x] Diagrama de arquitectura (`docs/arquitectura.drawio`)
 - [x] Bootstrap de Terraform aplicado (bucket + tabla DynamoDB creados)
@@ -320,10 +326,10 @@ groups/secreto de Aurora de Fase 1 via `terraform_remote_state`, nunca
 copiados a mano. Crea:
 
 - **ECR** (`ecr.tf`): un repo privado cada uno para GoTrue y PostgREST.
-  Por que no Docker Hub directo: las tareas de Fargate viven en subred
-  privada, sin NAT ni Internet Gateway en su ruta -- el unico camino para
-  bajar una imagen es el VPC Endpoint de ECR, preparado desde Fase 1.
-  Terraform solo crea el repo vacio; el `docker push` es manual (ver abajo).
+  Pensado originalmente para bajar la imagen por el VPC Endpoint de ECR sin
+  salir nunca a Internet -- ver "El pivot a subred publica" mas abajo, ese
+  plan cambio en el camino. Terraform solo crea el repo vacio; el
+  `docker push` es manual (ver abajo).
 - **Secrets Manager** (`secrets.tf`): JWT secret (lo comparten GoTrue y
   PostgREST, uno firma, el otro valida) y credenciales del rol
   `authenticator` que usa PostgREST -- **no** el master de Aurora. Las URLs
@@ -362,35 +368,60 @@ PostgREST se conecta de verdad, con la password que genero Terraform en
 `secrets.tf`). Sin esto, PostgREST arranca pero falla cada conexion con
 "role authenticator does not exist".
 
-### Como aplicarlo (orden, por la dependencia circular imagen <-> service)
+### Como se aplico en la practica (2026-10-16/17)
 
-Un ECS service con `desired_count >= 1` no termina de aplicar si la imagen
-que pide todavia no existe en ECR (Terraform espera a que el service
-estabilice y hace timeout). Por eso el apply va **en 2 pasos**, no de una:
+El plan original era un apply en 2 pasos (ECR+secretos primero, el resto
+despues) para esquivar que un ECS service con `desired_count >= 1` no
+termine de aplicar si la imagen no existe todavia. En la practica no hizo
+falta: `aws_ecs_service` tiene `wait_for_steady_state = false` por default
+en el provider de AWS -- el `apply` completo (38 recursos, incluidos los 2
+services) termino en segundos sin esperar a que las tareas levantaran de
+verdad. Terraform no avisa si las tareas de adentro fallan despues; hay que
+revisarlo aparte (`aws ecs describe-tasks` / CloudWatch Logs).
 
-1. **Paso 1 -- solo ECR y los secretos:**
-   ```
-   terraform apply -target=aws_ecr_repository.gotrue -target=aws_ecr_repository.postgrest -target=aws_secretsmanager_secret_version.authenticator
-   ```
-2. **Subir las imagenes oficiales** (desde una maquina con Docker y la
-   sesion de AWS activa):
-   ```
-   aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin <cuenta>.dkr.ecr.us-east-2.amazonaws.com
+Orden real que se siguio:
+1. `terraform apply` completo (los 38 recursos, sin `-target`).
+2. `docker login` a ECR + `docker pull` / `tag` / `push` de las imagenes
+   oficiales a cada repo. Ojo: `supabase/gotrue` **no tiene tag `:latest`**
+   en Docker Hub, solo versiones (`v2.187.0` funciono) -- se sube con el tag
+   real de origen pero se **re-etiqueta a `:latest` en ECR** (el tag de ECR
+   es independiente del de Docker Hub). `postgrest/postgrest:latest` si
+   existe.
+3. `db/post-gotrue-roles.sql` contra la base, via CloudShell (mismo patron
+   que `db/schema.sql` en Fase 1 -- acceso temporal, ver abajo).
 
-   docker pull supabase/gotrue:latest
-   docker tag supabase/gotrue:latest $(terraform output -raw ecr_gotrue_url):latest
-   docker push $(terraform output -raw ecr_gotrue_url):latest
+### El pivot a subred publica (2026-10-16/17)
 
-   docker pull postgrest/postgrest:latest
-   docker tag postgrest/postgrest:latest $(terraform output -raw ecr_postgrest_url):latest
-   docker push $(terraform output -raw ecr_postgrest_url):latest
-   ```
-3. **Correr `db/post-gotrue-roles.sql`** contra la base (password del rol
-   `authenticator` desde Secrets Manager, mismo patron que la password de
-   Aurora -- ver el script para el comando exacto).
-4. **Paso 2 -- el resto:**
-   ```
-   terraform apply
-   ```
-   Ahora la imagen ya existe en ECR y el rol `authenticator` ya existe en
-   Postgres, asi que los 2 services deberian estabilizar sin reintentos.
+GoTrue no lograba bajar su imagen: `CannotPullContainerError`, siempre
+intentando conectarse por una IP **publica** en vez de usar el VPC Endpoint
+`ecr.dkr` de Fase 1. Diagnostico a fondo, todo descartado uno por uno:
+`enableDnsSupport`/`enableDnsHostnames` de la VPC (OK), DHCP options
+(`AmazonProvidedDNS`, default), la zona privada de Route 53 del endpoint
+(asociada a la VPC correctamente), Resolver Rules (ninguna custom), DNS
+Firewall (ninguno). Se probo tambien borrar y recrear el endpoint de cero
+-- mejoro pero quedo intermitente (algunos intentos de pull funcionaban,
+la mayoria no). Causa real: **sin determinar** -- no descartado que sea
+otra restriccion propia de esta cuenta "Ready Set Build" (van 3: Aurora sin
+VPC, sin SSO, y esta).
+
+**Decision:** en vez de seguir cazando la causa, `aws_ecs_service.gotrue` y
+`.postgrest` (`terraform/supabase-propio/ecs.tf`) se movieron de subred
+privada a **subred publica con IP publica** (`assign_public_ip = true`) --
+bajan la imagen de ECR (y hablan con Secrets Manager/CloudWatch Logs) por
+Internet directo, saltandose el VPC Endpoint problematico. `sg-servicios`
+(`network.tf`, Fase 1) gano un egress nuevo a `0.0.0.0/0` puerto 443 para
+esto.
+
+**La seguridad real no se debilito donde importa:** `sg-servicios` sigue
+sin aceptar NADA entrante salvo desde `sg-alb` -- tener IP publica no
+alcanza para que alguien le hable directo al contenedor, el firewall sigue
+cerrado. Lo que SI cambia es que estas 2 tareas pueden iniciar conexiones
+salientes a Internet (antes no podian, a proposito). Aurora/RDS sigue 100%
+privada, sin tocar.
+
+**Efecto colateral de costo, pendiente de decidir:** los VPC Interface
+Endpoints (`ecr.api`, `ecr.dkr`, `secretsmanager`, `logs`, ~$7/mes cada uno)
+ya no los usa el trafico de GoTrue/PostgREST -- siguen existiendo (y
+cobrando) pero quedaron sin proposito real salvo que algo mas los use en el
+futuro. Evaluar sacarlos (ahorraria ~$28/mes) o dejarlos como estan --
+decision de Bryan, no tomada todavia.
