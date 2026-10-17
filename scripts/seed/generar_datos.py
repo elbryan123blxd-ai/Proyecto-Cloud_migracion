@@ -352,9 +352,10 @@ def arreglar_tokens_null(cur):
     to string is unsupported" al loguear a cualquier usuario que las
     tenga en NULL. crear_auth_user() ya las manda en '' a proposito, pero
     esto corre igual, por si GoTrue suma una columna asi en una version
-    futura que crear_auth_user todavia no conoce. Ver
-    db/fix-auth-users-tokens-null.sql para el mismo arreglo corrido a
-    mano, con el detalle completo en el comentario."""
+    futura que crear_auth_user todavia no conoce. Excluye columnas con
+    restriccion UNIQUE (como "phone"): ponerlas todas en '' choca entre
+    filas distintas. Ver db/fix-auth-users-tokens-null.sql para el mismo
+    arreglo corrido a mano, con el detalle completo en el comentario."""
     cur.execute(
         """
         do $$
@@ -362,11 +363,21 @@ def arreglar_tokens_null(cur):
           col text;
         begin
           for col in
-            select column_name
-            from information_schema.columns
-            where table_schema = 'auth'
-              and table_name = 'users'
-              and data_type in ('text', 'character varying')
+            select c.column_name
+            from information_schema.columns c
+            where c.table_schema = 'auth'
+              and c.table_name = 'users'
+              and c.data_type in ('text', 'character varying')
+              and c.column_name not in (
+                select kcu.column_name
+                from information_schema.table_constraints tc
+                join information_schema.key_column_usage kcu
+                  on tc.constraint_name = kcu.constraint_name
+                 and tc.table_schema = kcu.table_schema
+                where tc.table_schema = 'auth'
+                  and tc.table_name = 'users'
+                  and tc.constraint_type in ('UNIQUE', 'PRIMARY KEY')
+              )
           loop
             execute format('update auth.users set %I = '''' where %I is null', col, col);
           end loop;
