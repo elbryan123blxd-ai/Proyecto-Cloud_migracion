@@ -1,0 +1,12 @@
+-- GoTrue corre una migracion propia (20240612123726_enable_rls_update_grants)
+-- que da por sentado que existe un rol de Postgres llamado literalmente
+-- "postgres" -- es la convencion real de Supabase, el superusuario de
+-- cualquier proyecto Supabase siempre se llama asi. Esta base usa un
+-- nombre distinto para el master (academia_premier_admin, ver rds.tf),
+-- asi que ese rol nunca existio. Sin esto, GoTrue arranca, intenta correr
+-- sus migraciones, y muere con "role postgres does not exist" en bucle.
+--
+-- No hace falta que sea superusuario ni que tenga login -- la migracion
+-- solo le otorga SELECT con grant option sobre las tablas de auth, nunca
+-- se usa para conectarse.
+create role postgres;
