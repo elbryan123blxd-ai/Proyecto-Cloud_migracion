@@ -10,7 +10,14 @@ credencial permanente.
 > Produccion sigue en Supabase y Vercel. Esto es una replica con datos generados.
 > Ningun dato real de alumnos entra a esta infraestructura.
 
-**Estado:** Fase 1 aplicada (VPC, RDS PostgreSQL, Secrets Manager). Ver [docs/PLAN.md](docs/PLAN.md).
+**Estado:** Fases 0, 1 y 2 completas y verificadas en vivo — red, base de datos, GoTrue y
+PostgREST corriendo en ECS Fargate detras de CloudFront, con 30.000 alumnos de prueba
+cargados. El login real de la aplicacion funciona contra esta infraestructura. Fase 3 (las
+apps) en curso. Ver [docs/PLAN.md](docs/PLAN.md).
+
+> 📖 **¿Primera vez acá? Empezá por [docs/COMO-FUNCIONA.md](docs/COMO-FUNCIONA.md)** — explica
+> el proyecto entero desde cero: Terraform, cada servicio de AWS, networking y seguridad con
+> analogias, y los problemas reales que aparecieron en el camino (con sus soluciones).
 
 ## Arquitectura
 
@@ -19,26 +26,30 @@ Version con iconos de AWS, siempre actualizada: [abrir el diagrama](https://app.
 ```
                               Internet
                                  |
-                           [ CloudFront ]
-                                 |
+                                 |  HTTPS
+                                 v
+                        [ CloudFront ]  <-- el "Kong" del clon: una sola URL,
+                                 |          reparte por path y le saca el prefijo
                  +---------------+---------------+
                  |                               |
-           [ Apps Next.js ]                   [ ALB ]
-            Lambda / Amplify                 (unico, por
-                 |                          path: /auth/*)
-            [ S3 ]                               |
-         (archivos)          +--- VPC privada ---+-----------------------+
-                              |  sin acceso directo desde Internet       |
-                              |                                         |
-                        [ GoTrue (auth) ]  <------->  [ PostgREST (API) ]
-                          ECS Fargate                   ECS Fargate
-                              |                                         |
-                              +------------------+----------------------+
-                                                  |
-                                        [ RDS PostgreSQL ]
-                                      Postgres 15.19, db.t4g.micro
-                                                  |
-                                        [ Secrets Manager ]
+      /auth/v1/* |                               | /rest/v1/*
+                 v                               v
+            [ ALB :8081 ]                   [ ALB :80 ]
+                 |          (un unico ALB, dos listeners)
+   +-------------+------- VPC privada --------+--------------+
+   |              sin acceso directo desde Internet          |
+   |                                                         |
+   |       [ GoTrue (auth) ]              [ PostgREST (API) ]|
+   |         ECS Fargate                     ECS Fargate     |
+   |              |                               |          |
+   |              +---------------+---------------+          |
+   |                              |                          |
+   |                    [ RDS PostgreSQL ]                   |
+   |                  Postgres 15.19, db.t4g.micro           |
+   |                  (RLS: aisla por academia)              |
+   +---------------------------------------------------------+
+                                  |
+                        [ Secrets Manager ]
 
    Aparte, no es runtime de la app -- es tooling para construir todo lo de arriba:
    [ Terraform ] --guarda el estado--> [ S3 tfstate ] --toma el lock--> [ DynamoDB ]
@@ -86,10 +97,20 @@ PostgREST) solo necesitan hablar con S3, ECR, Secrets Manager y CloudWatch Logs 
 con Internet en general. Un VPC Endpoint por cada uno de esos servicios da acceso privado
 y especifico, sin tocar Internet, mas barato y mas seguro que una salida general.
 
-**Un solo Application Load Balancer, no dos.** Un ALB no esta atado a un servicio: reparte
-trafico segun el *path* del pedido. Con una sola regla (`/auth/*` -> GoTrue, el resto ->
-PostgREST) alcanza un ALB para los dos servicios, evitando pagar un segundo load balancer
-completo solo por tener dos backends distintos.
+**Un solo Application Load Balancer, no dos.** Un ALB no esta atado a un servicio: alcanza
+uno para los dos backends, evitando pagar un segundo load balancer completo. Acá reparte
+por *puerto* (80 -> PostgREST, 8081 -> GoTrue), no por path, por el motivo de abajo.
+
+**CloudFront reemplaza a Kong.** Supabase usa Kong por dentro para que una sola URL
+reparta entre varios servicios: mira el path (`/auth/v1/...`, `/rest/v1/...`), **le saca el
+prefijo** y lo reenvia. Un ALB sabe repartir por path pero **no sabe reescribirlo**, y el
+cliente oficial de Supabase asume esa estructura de URL. Ademas, el navegador bloquea que
+una pagina HTTPS llame a una API HTTP, y un certificado propio necesita un dominio que no
+tenemos. CloudFront resuelve las dos cosas: da HTTPS gratis con su propio dominio, y con dos
+CloudFront Functions de ocho lineas hace el trabajo completo de Kong (reescribir el path y
+agregar los headers de CORS). **Resultado: las 5 apps Next.js no cambian una sola linea de
+codigo** — solo apuntan a otra URL. Detalle completo en
+[docs/COMO-FUNCIONA.md](docs/COMO-FUNCIONA.md#6-cloudfront-el-reemplazo-de-kong).
 
 ## Capacidad objetivo y costos
 
@@ -112,5 +133,24 @@ y el detalle de la decision en [CLAUDE.md](CLAUDE.md).
 
 ## Como levantarlo
 
-Pendiente. Se documenta al cerrar la Fase 1. El bootstrap de Terraform
-(`terraform/bootstrap/`) ya esta escrito -- falta correr `terraform apply`.
+Tres modulos de Terraform, en orden. Cada uno guarda su estado por separado:
+
+```bash
+# 1. El backend remoto: bucket S3 para el estado + tabla DynamoDB para el candado.
+#    Este guarda SU estado en local a proposito (no puede guardarlo en el bucket
+#    que todavia no existe).
+cd terraform/bootstrap && terraform init && terraform apply
+
+# 2. Red y base: VPC, subredes, security groups, VPC Endpoints, RDS, Secrets Manager.
+cd ../red-y-base && terraform init && terraform apply
+
+# 3. El "Supabase propio": ECR, ECS Fargate, ALB, CloudFront, S3, IAM, auto-scaling.
+cd ../supabase-propio && terraform init && terraform apply
+```
+
+Entre el 2 y el 3 hay pasos manuales (cargar el esquema SQL, subir las imagenes a ECR,
+crear los roles de Postgres que Supabase trae de fabrica). El orden exacto, con los
+comandos, esta en [CLAUDE.md](CLAUDE.md#como-se-aplico-en-la-practica-2026-10-1617).
+
+Para destruir todo y no dejar nada cobrando, el orden es al reves (3, 2, 1) con
+`terraform destroy`.
