@@ -523,3 +523,76 @@ pestaña normal (con salida a Internet) y pasados por el bucket S3, porque
 
 Fase 0 y Fase 2 completas del todo. Sigue Fase 3 (desplegar las apps
 Next.js y apuntarlas a la nueva URL).
+
+## Fase 3 -- en curso (2026-10-17, arrancada de madrugada)
+
+**El plan:** `Proyecto_Full_Stack2.0` (las 5 apps reales) no vive en este
+repo -- se clona aparte, en una rama local que **nunca se pushea** al
+repo real (`aws-clon-fase3`, nunca toca `main` ni `produccion`). El
+codigo de las apps **no se modifica**: usan el cliente oficial de
+Supabase (`@supabase/ssr`), que asume una sola URL con `/auth/v1/...` y
+`/rest/v1/...` -- justo lo que CloudFront ya resuelve (ver mas abajo).
+Alcanza con apuntar `NEXT_PUBLIC_SUPABASE_URL` a CloudFront.
+
+### CloudFront como reemplazo de Kong
+
+Problema real, encontrado en el camino: Amplify sirve por HTTPS
+obligatorio, y una pagina HTTPS no puede llamar a una API HTTP (mixed
+content) -- el ALB es HTTP puro (sin dominio propio para un certificado).
+Ademas, el cliente de Supabase arma `<url>/auth/v1/...` y
+`<url>/rest/v1/...` esperando que algo (Kong, en el Supabase real) le
+saque el prefijo antes de reenviar a GoTrue/PostgREST.
+
+Solucion: `terraform/supabase-propio/cloudfront.tf`. Una distribucion de
+CloudFront con 2 origins (GoTrue y PostgREST, ambos puertos del mismo
+ALB) y 2 CloudFront Functions:
+- **`quitar_prefijo`** (viewer-request): saca `/auth/v1` y `/rest/v1` del
+  path antes de reenviar. Ademas corta el preflight CORS (`OPTIONS`)
+  directo en el borde, sin llegar a los contenedores.
+- **`agregar_cors`** (viewer-response): le agrega
+  `Access-Control-Allow-Origin` a la respuesta real. Sin esto el
+  navegador bloqueaba el login con "No 'Access-Control-Allow-Origin'
+  header is present" -- GoTrue/PostgREST solos no agregan ese header, en
+  el Supabase real lo pone Kong.
+
+Las dos funciones reflejan **cualquier origen** que pida, en vez de una
+lista fija -- simplificacion a proposito (5 apps, cada una en su puerto
+en localhost y despues su propio dominio de Amplify; sin esto habria que
+mantener una lista larga). Documentado como trade-off de seguridad
+valido para un clon de portfolio sin datos reales, no como descuido.
+
+URL de la API: `terraform output api_url` (carpeta `supabase-propio`).
+Las claves `anon`/`service_role` NO son random -- son JWT firmados con el
+mismo secreto que usan GoTrue/PostgREST (`scripts/generar-claves-jwt.py`,
+sin dependencias, con modo de un solo token para evitar que copiar/pegar
+un string largo a mano corrompa la firma).
+
+### Donde quedo, literal (para retomar mañana)
+
+1. **CORS ya funciona** -- confirmado en vivo: el pedido de login llega
+   hasta GoTrue (antes el navegador ni lo mandaba, bloqueado por CORS).
+2. **GoTrue responde 500**: `{"error":"Database error querying schema"}`.
+   Es un mensaje generico de GoTrue -- esconde el error SQL real. **El
+   proximo paso es mirar los logs reales:**
+   ```
+   aws logs tail /ecs/academia-premier/gotrue --since 5m --region us-east-2
+   ```
+   (se puede correr desde la PC de Bryan directo, sin CloudShell --
+   CloudWatch Logs es una API publica)
+3. Sospecha, sin confirmar todavia: el patron de esta noche fue siempre
+   "falta algo que Supabase Cloud trae armado de fabrica y aca no" (el rol
+   `postgres`, la password mal transcripta) -- primer lugar a mirar:
+   permisos/columnas que el login necesita tocar y que capaz no estan
+   bien (alguna extension de Postgres, algun grant que falte sobre
+   `auth.*` especificamente para el flujo de login, no solo para
+   `auth.users`).
+4. Infra de esta fase ya aplicada y funcionando: CloudFront, las 2
+   CloudFront Functions, el repo clonado en
+   `Proyecto_Full_Stack2.0-clon-aws` (rama `aws-clon-fase3`, SOLO en la PC
+   de Bryan, no en este repo), `apps/dashboard/.env.local` con la URL de
+   CloudFront y la clave `anon`, `pnpm install` corrido, `pnpm dev`
+   corriendo en `localhost:3001`.
+5. Usuario de prueba para seguir probando el login una vez arreglado:
+   `millacecilia@example.net` / `Demo1234!` (director, sacado en vivo con
+   `curl` + la clave `service_role` contra PostgREST, sin tocar la base
+   directo).
