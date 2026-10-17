@@ -169,19 +169,22 @@ resource "aws_security_group" "servicios" {
     cidr_blocks = [var.vpc_cidr]
   }
 
-  # Agregado 2026-10-16: GoTrue/PostgREST se movieron a subred publica (ver
-  # terraform/supabase-propio/ecs.tf) porque el VPC Endpoint ecr.dkr no
-  # resolvia bien por DNS privada, sin causa clara. Bajan su imagen de ECR
-  # (y hablan con Secrets Manager/CloudWatch Logs) por Internet directo
-  # ahora -- hace falta este egress a 0.0.0.0/0 en 443 para eso. Sigue sin
-  # recibir NADA entrante salvo del ALB (ver ingress arriba) -- esto solo
-  # habilita SALIDA.
+  # Agregado 2026-10-16, causa real encontrada 2026-10-17: GoTrue no podia
+  # bajar su imagen de ECR (CannotPullContainerError, timeout). No era DNS
+  # privada rota (se sospecho esto primero, hasta se probo mover todo a
+  # subred publica -- revertido) -- ECR guarda las CAPAS de las imagenes en
+  # S3, y el Gateway Endpoint de S3 (ver aws_vpc_endpoint.s3 mas abajo) usa
+  # IPs PUBLICAS como destino, solo cambia el RUTEO (nunca sale a Internet),
+  # no el DNS. El egress de arriba (solo 10.0.0.0/16) bloqueaba esas IPs.
+  # Confirmado con las IPs reales del error contra ip-ranges.json de AWS:
+  # son todas de S3 us-east-2. Fix: permitir salida a la prefix list de S3
+  # (una lista de rangos que AWS arma sola), no a todo Internet.
   egress {
-    description = "HTTPS a Internet -- ECR/Secrets Manager/CloudWatch Logs por la IP publica (ver nota arriba)"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "HTTPS hacia S3 (via el Gateway Endpoint) -- ahi vive el storage real de las imagenes de ECR"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    prefix_list_ids = [aws_vpc_endpoint.s3.prefix_list_id]
   }
 
   tags = { Name = "academia-premier-sg-servicios" }

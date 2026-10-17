@@ -325,11 +325,11 @@ ver "Como aplicarlo" abajo). Backend `s3`, misma key del bootstrap, otra
 groups/secreto de Aurora de Fase 1 via `terraform_remote_state`, nunca
 copiados a mano. Crea:
 
-- **ECR** (`ecr.tf`): un repo privado cada uno para GoTrue y PostgREST.
-  Pensado originalmente para bajar la imagen por el VPC Endpoint de ECR sin
-  salir nunca a Internet -- ver "El pivot a subred publica" mas abajo, ese
-  plan cambio en el camino. Terraform solo crea el repo vacio; el
-  `docker push` es manual (ver abajo).
+- **ECR** (`ecr.tf`): un repo privado cada uno para GoTrue y PostgREST. Las
+  tareas de Fargate los bajan por el VPC Endpoint de ECR, en subred
+  privada, sin salir nunca a Internet -- ver "El hallazgo del egress de
+  S3" mas abajo para el detalle fino de por que esto casi no funciona.
+  Terraform solo crea el repo vacio; el `docker push` es manual (ver abajo).
 - **Secrets Manager** (`secrets.tf`): JWT secret (lo comparten GoTrue y
   PostgREST, uno firma, el otro valida) y credenciales del rol
   `authenticator` que usa PostgREST -- **no** el master de Aurora. Las URLs
@@ -390,38 +390,40 @@ Orden real que se siguio:
 3. `db/post-gotrue-roles.sql` contra la base, via CloudShell (mismo patron
    que `db/schema.sql` en Fase 1 -- acceso temporal, ver abajo).
 
-### El pivot a subred publica (2026-10-16/17)
+### El hallazgo del egress de S3 (2026-10-16/17)
 
-GoTrue no lograba bajar su imagen: `CannotPullContainerError`, siempre
-intentando conectarse por una IP **publica** en vez de usar el VPC Endpoint
-`ecr.dkr` de Fase 1. Diagnostico a fondo, todo descartado uno por uno:
-`enableDnsSupport`/`enableDnsHostnames` de la VPC (OK), DHCP options
-(`AmazonProvidedDNS`, default), la zona privada de Route 53 del endpoint
-(asociada a la VPC correctamente), Resolver Rules (ninguna custom), DNS
-Firewall (ninguno). Se probo tambien borrar y recrear el endpoint de cero
--- mejoro pero quedo intermitente (algunos intentos de pull funcionaban,
-la mayoria no). Causa real: **sin determinar** -- no descartado que sea
-otra restriccion propia de esta cuenta "Ready Set Build" (van 3: Aurora sin
-VPC, sin SSO, y esta).
+GoTrue no lograba bajar su imagen: `CannotPullContainerError`, timeout al
+conectarse a IPs que, a simple vista, parecian publicas y ajenas a la VPC.
+Primer diagnostico (equivocado): se sospecho que el VPC Endpoint `ecr.dkr`
+no resolvia bien por DNS privada -- se descarto `enableDnsSupport`/
+`enableDnsHostnames` de la VPC, DHCP options, la asociacion de la zona
+privada de Route 53, Resolver Rules y DNS Firewall (todo OK), se probo
+borrar y recrear el endpoint (sin mejora real), y se llego a mover
+`aws_ecs_service.gotrue`/`.postgrest` a subred publica con IP publica como
+workaround -- **revertido** al encontrar la causa real.
 
-**Decision:** en vez de seguir cazando la causa, `aws_ecs_service.gotrue` y
-`.postgrest` (`terraform/supabase-propio/ecs.tf`) se movieron de subred
-privada a **subred publica con IP publica** (`assign_public_ip = true`) --
-bajan la imagen de ECR (y hablan con Secrets Manager/CloudWatch Logs) por
-Internet directo, saltandose el VPC Endpoint problematico. `sg-servicios`
-(`network.tf`, Fase 1) gano un egress nuevo a `0.0.0.0/0` puerto 443 para
-esto.
+**Causa real:** las IPs del error (verificadas contra el `ip-ranges.json`
+oficial de AWS) son de **S3**, no de ECR. ECR no guarda las capas de las
+imagenes el mismo -- las guarda en un bucket S3 (`prod-us-east-2-starport-
+layer-bucket`) y redirige ahi cuando Fargate pide bajarlas. El Gateway
+Endpoint de S3 (ya armado desde Fase 1) solo cambia el **ruteo** de ese
+trafico para que nunca salga de la red de AWS -- el **destino** sigue
+siendo una IP publica de S3, el DNS no cambia. `sg-servicios` tenia el
+egress limitado a `10.0.0.0/16` (solo adentro de la VPC), asi que
+bloqueaba exactamente esas IPs: por eso `ecr.dkr` SI funcionaba (resolver
+el tag `:latest` al digest de la imagen, que se ve en el error mismo, ya
+requeria haber hablado bien con el VPC Endpoint) pero bajar las capas
+nunca llegaba a buen puerto.
 
-**La seguridad real no se debilito donde importa:** `sg-servicios` sigue
-sin aceptar NADA entrante salvo desde `sg-alb` -- tener IP publica no
-alcanza para que alguien le hable directo al contenedor, el firewall sigue
-cerrado. Lo que SI cambia es que estas 2 tareas pueden iniciar conexiones
-salientes a Internet (antes no podian, a proposito). Aurora/RDS sigue 100%
-privada, sin tocar.
+**Fix real, sin moverse de subred privada:** `sg-servicios` (`network.tf`)
+gano un egress acotado a la **prefix list de S3**
+(`aws_vpc_endpoint.s3.prefix_list_id` -- una lista de rangos de IP que AWS
+arma y mantiene sola, no "todo Internet"), puerto 443. `ecs.tf`
+(`terraform/supabase-propio/`) volvio a subred privada, sin IP publica,
+tal cual el diseno original -- el pivot a subred publica no hacia falta.
 
-**Efecto colateral de costo, pendiente de decidir:** los VPC Interface
-Endpoints (`ecr.api`, `ecr.dkr`, `secretsmanager`, `logs`, ~$7/mes cada uno)
-ya no los usa el trafico de GoTrue/PostgREST -- siguen existiendo (y
-cobrando) pero quedaron sin proposito real salvo que algo mas los use en el
-futuro. Evaluar sacarlos (ahorraria ~$28/mes) o dejarlos como estan --
-decision de Bryan, no tomada todavia.
+**Leccion para el video:** un Gateway Endpoint (S3, DynamoDB) resuelve el
+*ruteo*, no el *destino* -- el security group lo sigue evaluando contra
+las IPs reales del servicio. Es una distincion que vale la pena explicar:
+mucha gente arma el VPC Endpoint y da por sentado que "ya no hace falta
+tocar el security group", y no es asi.

@@ -94,18 +94,18 @@ resource "aws_ecs_service" "gotrue" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    # CAMBIADO 2026-10-16 -- iba en subred privada, via VPC Endpoints
-    # (ecr.api/ecr.dkr/secretsmanager/logs). El endpoint ecr.dkr resolvia
-    # por DNS publica en vez de la zona privada por una razon que no se
-    # pudo determinar (VPC/DHCP/Resolver Rules/DNS Firewall, todo
-    # descartado) -- la tarea nunca podia bajar su imagen. Se mueve a
-    # subred publica con IP publica para bajarla por Internet directo.
-    # La seguridad real no cambia: sg-servicios solo acepta trafico
-    # entrante del ALB (ver network.tf), tener IP publica no alcanza para
-    # que alguien le hable directo.
-    subnets          = local.subredes_publicas
-    security_groups  = [local.sg_servicios_id]
-    assign_public_ip = true
+    subnets         = local.subredes_privadas
+    security_groups = [local.sg_servicios_id]
+    # Sin IP publica -- igual que la base, nunca es alcanzable directo desde
+    # Internet. Solo recibe trafico que ya paso por el ALB (ver network.tf).
+    #
+    # Revertido 2026-10-16/17 el intento de moverlo a subred publica: la
+    # causa real del CannotPullContainerError no era DNS privada rota, era
+    # el egress de sg-servicios (solo permitia 10.0.0.0/16). ECR guarda las
+    # capas de las imagenes en S3, y el Gateway Endpoint de S3 usa IPs
+    # PUBLICAS como destino (solo cambia el ruteo, no el DNS) -- por eso el
+    # security group las bloqueaba. Fix real: egress a la prefix list de S3
+    # en network.tf, sigue en subred privada como el plan original.
   }
 
   load_balancer {
@@ -181,10 +181,9 @@ resource "aws_ecs_service" "postgrest" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    # Mismo cambio y mismo motivo que en el service de gotrue (ver mas arriba).
-    subnets          = local.subredes_publicas
-    security_groups  = [local.sg_servicios_id]
-    assign_public_ip = true
+    # Revertido -- ver nota en el service de gotrue, mismo motivo.
+    subnets         = local.subredes_privadas
+    security_groups = [local.sg_servicios_id]
   }
 
   load_balancer {
