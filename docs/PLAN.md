@@ -67,9 +67,10 @@ pausar como Aurora Serverless v2), y casi $0 con el entorno apagado salvo por la
       -- confirmado 2026-10-14: no existe ningun otro bucket aparte del
       del bootstrap. La nota quedo desactualizada, no habia nada que borrar
 - [x] Generador de datos falsos para las 25 tablas de db/schema.sql --
-      `scripts/seed/generar_datos.py`. 5 academias, 30k alumnos, 60
-      admins/directores/tutores repartidos. Falta correrlo de verdad
-      (requiere Aurora + GoTrue desplegados, Fases 1-2)
+      `scripts/seed/generar_datos.py`. **Corrido de verdad 2026-10-17**:
+      5 academias, 30.000 alumnos, 100 personal (directores/admin_sede/
+      docentes/tutores), 30.100 usuarios en `auth.users` via GoTrue.
+      Password de prueba para todos: `Demo1234!`
 
 ### Fase 1 - Red y base
 - [x] Aplicada 2026-10-15 (`terraform/red-y-base/`): VPC, subredes publicas/privadas,

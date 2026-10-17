@@ -231,8 +231,8 @@ apuntando a esto.
 - [x] AWS Budget con alerta a $50 y $100
 - [x] Borrar el bucket S3 de prueba -- confirmado 2026-10-14: no existia,
       la nota habia quedado desactualizada
-- [x] Generador de datos falsos (`scripts/seed/generar_datos.py`) -- falta
-      correrlo de verdad, necesita Aurora + GoTrue desplegados (Fases 1-2)
+- [x] Generador de datos falsos (`scripts/seed/generar_datos.py`) --
+      **corrido de verdad 2026-10-17**, ver mas abajo
 - [x] Fase 1 aplicada 2026-10-15: VPC, subredes, security groups, VPC Endpoints,
       RDS PostgreSQL (`academia-premier-db`, Postgres 15.19, `db.t4g.micro`) y
       Secrets Manager, todo creado y confirmado en consola, us-east-2
@@ -245,8 +245,9 @@ apuntando a esto.
 - [x] Fase 2 completa 2026-10-17: GoTrue y PostgREST corriendo en ECS
       Fargate, subred privada, verificados en vivo atras del ALB (ver "El
       modulo de Fase 2" mas abajo)
-- [ ] Correr `scripts/seed/generar_datos.py` -- **siguiente paso real**,
-      GoTrue ya existe, ya se puede insertar en `auth.users`
+- [x] Correr `scripts/seed/generar_datos.py` -- 5 academias, 30.000
+      alumnos, 100 personal, 30.100 usuarios en `auth.users`. Password de
+      prueba para todos: `Demo1234!`
 - [ ] Prueba de carga real (60 admins + 30k alumnos en 3 oleadas) -- ver Fase 5 en
       `docs/PLAN.md`, requiere Fases 1-4 completas primero
 
@@ -292,10 +293,10 @@ falta una instancia bastante mas grande (familia `r6g`/`m6g`). El tamano exacto 
 justamente lo que la prueba de carga de la Fase 5 deberia determinar, no algo que se
 pueda calcular solo en teoria.
 
-Pendiente, en ese orden: ~~`terraform apply` (Bryan, MFA)~~ -> ~~cargar
+Fase 1 cerrada del todo: ~~`terraform apply` (Bryan, MFA)~~ -> ~~cargar
 `db/schema.sql` contra la base~~ -> ~~sacar el acceso temporal de
 CloudShell~~ -> ~~Fase 2 (ECS Fargate + GoTrue + PostgREST + ALB)~~ ->
-correr `scripts/seed/generar_datos.py`.
+~~correr `scripts/seed/generar_datos.py`~~. Sigue Fase 3 (apps Next.js).
 
 ### El hallazgo de auth.uid() (2026-10-16)
 
@@ -477,6 +478,17 @@ autenticados contra la base real, respondiendo atras del ALB:
 - `curl http://<alb-dns>:8081/health` -> `{"version":"v2.187.0","name":"GoTrue",...}`
 - `curl http://<alb-dns>:80/` -> 200 OK, esquema OpenAPI completo (137KB)
 
-Pendiente real de Fase 2: ninguno. Lo que sigue es Fase 3 (desplegar las
-apps Next.js) o, antes, correr `scripts/seed/generar_datos.py` (ahora que
-GoTrue existe, ya se puede insertar en `auth.users`).
+Pendiente real de Fase 2: ninguno.
+
+### Datos de prueba cargados (2026-10-17)
+
+`scripts/seed/generar_datos.py` corrido contra la base real -- 5
+academias, 30.000 alumnos, 100 personal (directores/admin_sede/docentes/
+tutores), 30.100 usuarios en `auth.users` via GoTrue. Password de prueba
+para todos: `Demo1234!`. Corrido desde CloudShell (`subnedprime`), con los
+paquetes de Python (`psycopg2-binary`, `Faker`, `bcrypt`) preparados en la
+pestaña normal (con salida a Internet) y pasados por el bucket S3, porque
+`subnedprime` no tiene ni `pip install` ni Upload file.
+
+Fase 0 y Fase 2 completas del todo. Sigue Fase 3 (desplegar las apps
+Next.js y apuntarlas a la nueva URL).
