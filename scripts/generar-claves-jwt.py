@@ -73,6 +73,24 @@ def main() -> None:
 
     ahora = int(time.time())
 
+    # Con un argumento (anon | service_role): imprime SOLO ese token, sin
+    # nada mas alrededor -- pensado para capturarlo directo en una variable
+    # (`$env:X = python generar-claves-jwt.py anon`) sin que nadie tenga que
+    # copiar/pegar un string larguisimo a mano. Un solo caracter corrompido
+    # en el medio (algo que ya paso varias veces esta sesion, la terminal
+    # parte strings largos en varias lineas visuales) invalida la firma del
+    # JWT entero, y el error que tira PostgREST no deja ver que paso.
+    if len(sys.argv) > 1:
+        rol_pedido = sys.argv[1]
+        if rol_pedido not in ("anon", "service_role"):
+            sys.exit("El argumento tiene que ser 'anon' o 'service_role'")
+        token = firmar_jwt(
+            {"role": rol_pedido, "iss": "supabase", "iat": ahora, "exp": ahora + DIEZ_ANIOS_EN_SEGUNDOS},
+            secreto,
+        )
+        print(token, end="")
+        return
+
     for rol in ("anon", "service_role"):
         token = firmar_jwt(
             {
