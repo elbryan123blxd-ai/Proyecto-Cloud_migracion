@@ -23,6 +23,21 @@ Codigo fuente del producto real: repo privado `Proyecto_Full_Stack2.0`. Ese codi
 5. Antes de cada push: revisar que no se cuele ningun `.env`, dump de base, o clave. El
    `.gitignore` ya cubre los casos conocidos, pero revisar igual.
 
+## Dos maquinas, no una
+
+Bryan trabaja desde **dos maquinas fisicas distintas**, no es un detalle menor:
+
+- **La laptop**: donde corre Claude Code (esta sesion). Edita archivos, los commitea y
+  los pushea a GitHub -- pero eso solo los deja en el repo remoto, no en la PC de Bryan.
+- **Su PC**: donde tiene todo lo demas -- CloudShell, terraform apply, Docker, el
+  navegador para probar las apps. Ahi es donde Bryan realmente ejecuta las cosas.
+
+**Por eso, cada vez que el agente edita y pushea un archivo que Bryan va a necesitar usar
+(subir a CloudShell, correr un script, aplicar un `.tf`), avisarle explicitamente que
+corra `git pull origin main` en su PC primero.** Pasó varias veces (2026-10-17) que Bryan
+subió a CloudShell una version vieja de un archivo porque todavia no habia hecho `pull` --
+perdio tiempo con errores que en realidad eran "estoy usando el archivo de ayer".
+
 ## Arquitectura (resumen, detalle en README.md)
 
 | Pieza en Supabase/Vercel | Reemplazo en AWS | Por que |
