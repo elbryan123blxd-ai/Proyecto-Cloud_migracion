@@ -254,8 +254,13 @@ resource "aws_vpc_endpoint" "s3" {
 # diferencia de S3, estos usan security group (sg-vpc-endpoints de arriba).
 locals {
   interface_endpoints = {
-    ecr_api         = "com.amazonaws.us-east-2.ecr.api"        # para que Fargate pida la imagen del contenedor
-    ecr_dkr         = "com.amazonaws.us-east-2.ecr.dkr"        # idem, la parte que baja las capas de la imagen
+    ecr_api = "com.amazonaws.us-east-2.ecr.api" # para que Fargate pida la imagen del contenedor
+    # ecr_dkr -- TEMPORALMENTE SACADO 2026-10-16 para forzar su recreacion:
+    # resolvia por DNS publica en vez de la zona privada (diagnosticado a
+    # fondo, descartado DHCP/Resolver Rules/DNS Firewall, sigue sin
+    # explicacion clara). Sacar este comentario y la linea de abajo, aplicar
+    # de nuevo, para recrearlo de cero.
+    # ecr_dkr       = "com.amazonaws.us-east-2.ecr.dkr"
     secrets_manager = "com.amazonaws.us-east-2.secretsmanager" # para que GoTrue/PostgREST pidan la password de Aurora
     logs            = "com.amazonaws.us-east-2.logs"           # para que los contenedores manden logs a CloudWatch
   }
