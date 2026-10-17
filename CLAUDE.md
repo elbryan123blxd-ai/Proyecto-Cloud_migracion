@@ -135,6 +135,28 @@ desplegar codigo que ya los tiene resueltos.
   pertenecer a una Organization de AWS ajena, propia del programa de creditos -- una cuenta
   nueva armada directo por Bryan no deberia tenerla, a confirmar).
 
+**3 capas nuevas de seguridad, decididas 2026-10-17, a aplicar junto con el despliegue en
+la cuenta nueva** (ninguna existia en el diseno original, se suman ahora que no hay tanta
+restriccion de plataforma de por medio):
+
+- **NACLs propias** por subred (publica y privada), ademas de los security groups que ya
+  existen. Ojo con el detalle tecnico: un NACL es *stateless* (a diferencia de un security
+  group) -- hay que declarar la regla de ida Y la de vuelta por separado, y la de vuelta usa
+  puertos efimeros (1024-65535), no el puerto real del servicio. Es la trampa clasica de
+  armar un NACL y romper la conectividad sin entender por que.
+- **Rotacion automatica de secretos**: Lambda + Secrets Manager, rotando la password del
+  master de la base y la del rol `authenticator` cada ~30 dias. El JWT secret queda **fuera
+  de alcance** a proposito -- rotarlo invalida todas las sesiones activas al instante y hay
+  que coordinar que GoTrue y PostgREST lo tomen al mismo tiempo, mas complejo que el caso
+  estandar que cubre la plantilla de AWS.
+- **AWS WAF**, colgado de la distribucion de CloudFront (que ya existe, se engancha
+  directo). Filtra patrones de ataque conocidos (SQL injection, XSS) y puede limitar
+  requests por IP, antes de que el trafico le llegue a GoTrue/PostgREST.
+
+**Descartado a proposito:** AWS Shield Advanced ($3.000/mes minimo, compromiso de 1 anio --
+totalmente fuera de escala para este proyecto). Shield Standard ya viene activo gratis, sin
+configurar nada, en CloudFront y el ALB, para cualquier cuenta -- no hace falta tocarlo.
+
 **Estado (2026-10-17, tarde):** cuenta nueva en proceso de creacion. Hasta que este lista y
 el usuario IAM + MFA esten armados ahi, todo lo de este documento referido a "la cuenta" o
 `780017222841` sigue describiendo la cuenta vieja ("Ready Set Build") -- actualizar esta
