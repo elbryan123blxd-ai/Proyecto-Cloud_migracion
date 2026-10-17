@@ -344,6 +344,37 @@ def generar_exams_resultados(cur, academia_id, cycles, students, n_exams=3):
         )
 
 
+def arreglar_tokens_null(cur):
+    """Red de seguridad para el hallazgo de Fase 3 (2026-10-17): GoTrue no
+    sabe leer NULL en varias columnas de texto de auth.users
+    (confirmation_token, email_change, y toda esa familia de "tokens" y
+    "pendientes de cambio") -- se cae con "Scan error ... converting NULL
+    to string is unsupported" al loguear a cualquier usuario que las
+    tenga en NULL. crear_auth_user() ya las manda en '' a proposito, pero
+    esto corre igual, por si GoTrue suma una columna asi en una version
+    futura que crear_auth_user todavia no conoce. Ver
+    db/fix-auth-users-tokens-null.sql para el mismo arreglo corrido a
+    mano, con el detalle completo en el comentario."""
+    cur.execute(
+        """
+        do $$
+        declare
+          col text;
+        begin
+          for col in
+            select column_name
+            from information_schema.columns
+            where table_schema = 'auth'
+              and table_name = 'users'
+              and data_type in ('text', 'character varying')
+          loop
+            execute format('update auth.users set %I = '''' where %I is null', col, col);
+          end loop;
+        end $$;
+        """
+    )
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--academias", type=int, default=5)
@@ -385,6 +416,9 @@ def main():
             generar_exams_resultados(cur, academia_id, cycles, students)
 
             conn.commit()  # commit por academia, asi un fallo no tira todo el trabajo previo
+
+        arreglar_tokens_null(cur)
+        conn.commit()
 
         print("Listo. Password de prueba para todos los usuarios generados:", PASSWORD_DEMO)
     except Exception:
