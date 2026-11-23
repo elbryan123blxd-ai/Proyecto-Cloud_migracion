@@ -1,5 +1,5 @@
 # Fase 1 del plan: Red y base. Crea la VPC, las subredes, los security
-# groups, Aurora Serverless v2 y el secreto de su contrasena.
+# groups, RDS PostgreSQL y el secreto de su contrasena.
 #
 # Backend remoto "s3" -- apunta a lo que creo el modulo bootstrap (ver
 # terraform/bootstrap/). Esta es la primera pieza real de la arquitectura,
@@ -19,25 +19,26 @@ terraform {
     }
   }
 
-  backend "s3" {
-    bucket         = "academia-premier-tfstate-994b4178"
-    key            = "red-y-base/terraform.tfstate"
-    region         = "us-east-2"
-    dynamodb_table = "academia-premier-tflock"
-    encrypt        = true
-  }
+  # Configuracion por entorno mediante init -backend-config=...; nunca reutilizar el estado viejo.
+  backend "s3" {}
 }
 
 provider "aws" {
-  region = "us-east-2"
+  region              = "us-east-2"
+  allowed_account_ids = [var.expected_account_id]
 
   default_tags {
     tags = {
-      project   = "academia-premier-clon"
-      managedby = "terraform"
-      capa      = "red-y-base"
+      project     = "academia-premier-clon"
+      managedby   = "terraform"
+      capa        = "red-y-base"
+      environment = var.environment
     }
   }
+}
+
+locals {
+  prefijo = "academia-premier-${var.environment}"
 }
 
 data "aws_availability_zones" "disponibles" {

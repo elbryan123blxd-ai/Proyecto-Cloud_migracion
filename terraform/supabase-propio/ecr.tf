@@ -13,7 +13,7 @@
 # =============================================================================
 
 resource "aws_ecr_repository" "gotrue" {
-  name                 = "academia-premier/gotrue"
+  name                 = "academia-premier/${var.environment}/gotrue"
   image_tag_mutability = "MUTABLE" # permite re-subir "latest" sin crear un repo nuevo cada vez
 
   image_scanning_configuration {
@@ -24,7 +24,7 @@ resource "aws_ecr_repository" "gotrue" {
 }
 
 resource "aws_ecr_repository" "postgrest" {
-  name                 = "academia-premier/postgrest"
+  name                 = "academia-premier/${var.environment}/postgrest"
   image_tag_mutability = "MUTABLE"
 
   image_scanning_configuration {

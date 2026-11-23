@@ -15,7 +15,7 @@ resource "aws_appautoscaling_target" "gotrue" {
 }
 
 resource "aws_appautoscaling_policy" "gotrue_cpu" {
-  name               = "academia-premier-gotrue-cpu"
+  name               = "${local.prefijo}-gotrue-cpu"
   policy_type        = "TargetTrackingScaling"
   service_namespace  = aws_appautoscaling_target.gotrue.service_namespace
   resource_id        = aws_appautoscaling_target.gotrue.resource_id
@@ -38,7 +38,7 @@ resource "aws_appautoscaling_target" "postgrest" {
 }
 
 resource "aws_appautoscaling_policy" "postgrest_cpu" {
-  name               = "academia-premier-postgrest-cpu"
+  name               = "${local.prefijo}-postgrest-cpu"
   policy_type        = "TargetTrackingScaling"
   service_namespace  = aws_appautoscaling_target.postgrest.service_namespace
   resource_id        = aws_appautoscaling_target.postgrest.resource_id

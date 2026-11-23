@@ -1,156 +1,129 @@
-# Migracion de un SaaS multi-tenant a AWS serverless
+# Academia Premier · réplica de un SaaS sobre AWS
 
-Replica sobre AWS de **Academia Premier**, un SaaS de gestion para academias
-preuniversitarias del Peru que hoy corre en Supabase + Vercel.
+Infraestructura como código para reproducir los componentes principales de un SaaS
+multi-tenant construido con Supabase y Next.js. **Es una réplica con datos generados,
+preparada con criterios de producción; no es una migración de clientes reales.**
 
-El objetivo es demostrar la migracion completa: red, base de datos, autenticacion,
-API, almacenamiento, despliegue y observabilidad, todo con Terraform y sin una sola
-credencial permanente.
+Producción permanece en Supabase/Vercel. Este entorno no se conecta a su base ni importa
+datos reales. El frontend vive en otro repositorio y su despliegue completo sigue pendiente.
 
-> Produccion sigue en Supabase y Vercel. Esto es una replica con datos generados.
-> Ningun dato real de alumnos entra a esta infraestructura.
+## Empieza aquí
 
-**Estado:** Fases 0, 1 y 2 completas y verificadas en vivo — red, base de datos, GoTrue y
-PostgREST corriendo en ECS Fargate detras de CloudFront, con 30.000 alumnos de prueba
-cargados. El login real de la aplicacion funciona contra esta infraestructura. Fase 3 (las
-apps) en curso. Ver [docs/PLAN.md](docs/PLAN.md).
+Para una vista por entorno en VS Code, usa **Archivo → Abrir área de trabajo desde archivo**:
 
-> 📖 **¿Primera vez acá? Empezá por [docs/COMO-FUNCIONA.md](docs/COMO-FUNCIONA.md)** — explica
-> el proyecto entero desde cero: Terraform, cada servicio de AWS, networking y seguridad con
-> analogias, y los problemas reales que aparecieron en el camino (con sus soluciones).
+- [DEV](DEV.code-workspace) · barra verde.
+- [PRE-PROD](PRE-PROD.code-workspace) · barra ámbar.
+- [PRODUCCIÓN](PRODUCCION.code-workspace) · barra roja.
+
+Cada vista incluye solo la configuración de su entorno y las carpetas compartidas necesarias.
+Con **Ctrl+Shift+B** validas Terraform; en **Terminal → Ejecutar tarea** están las pruebas,
+formato, preparación del backend y planes. [Detalles de las tareas](terraform/environments/README.md#espacios-de-trabajo-de-vs-code).
+
+| Documento | Contenido |
+|---|---|
+| [Plan y estado](docs/PLAN.md) | Entregables, pendientes y criterios de aceptación |
+| [Arquitectura](docs/ARQUITECTURA.md) | Topología, decisiones y límites actuales |
+| [Seguridad y acceso](docs/SEGURIDAD.md) | Root, roles, RBAC/ABAC, RLS, GuardDuty y NACL |
+| [Observabilidad](docs/OBSERVABILIDAD.md) | Dashboard, alarmas configurables y runbooks |
+| [Operación](docs/OPERACION.md) | Despliegue, validación, recuperación y limpieza |
+| [Costos](docs/COSTOS.md) | Método de estimación y costos todavía no verificados |
+| [Guion de YouTube](docs/GUION-YOUTUBE.md) | Historia, demostraciones y evidencias |
 
 ## Arquitectura
 
-Version con iconos de AWS, siempre actualizada: [abrir el diagrama](https://app.diagrams.net/?url=https://raw.githubusercontent.com/elbryan123blxd-ai/Proyecto-Cloud_migracion/main/docs/arquitectura.drawio)
+```text
+Usuarios / apps Next.js (hosting pendiente)
+                │ HTTPS
+     CloudFront + Functions (rutas y CORS)
+                │ HTTP actualmente; TLS al origen pendiente
+     ALB público · listeners 80 / 8081
+                │
+     VPC 10.0.0.0/16 · dos zonas de disponibilidad
+       ├─ Subredes públicas: ALB
+        ├─ Privadas aplicación: GoTrue :9999 / PostgREST :3000
+        │                          │ PostgreSQL :5432
+        └─ Privadas datos: RDS PostgreSQL (Single-AZ en dev)
 
-```
-                              Internet
-                                 |
-                                 |  HTTPS
-                                 v
-                        [ CloudFront ]  <-- el "Kong" del clon: una sola URL,
-                                 |          reparte por path y le saca el prefijo
-                 +---------------+---------------+
-                 |                               |
-      /auth/v1/* |                               | /rest/v1/*
-                 v                               v
-            [ ALB :8081 ]                   [ ALB :80 ]
-                 |          (un unico ALB, dos listeners)
-   +-------------+------- VPC privada --------+--------------+
-   |              sin acceso directo desde Internet          |
-   |                                                         |
-   |       [ GoTrue (auth) ]              [ PostgREST (API) ]|
-   |         ECS Fargate                     ECS Fargate     |
-   |              |                               |          |
-   |              +---------------+---------------+          |
-   |                              |                          |
-   |                    [ RDS PostgreSQL ]                   |
-   |                  Postgres 15.19, db.t4g.micro           |
-   |                  (RLS: aisla por academia)              |
-   +---------------------------------------------------------+
-                                  |
-                        [ Secrets Manager ]
-
-   Aparte, no es runtime de la app -- es tooling para construir todo lo de arriba:
-   [ Terraform ] --guarda el estado--> [ S3 tfstate ] --toma el lock--> [ DynamoDB ]
+     Endpoints privados: ECR, Secrets Manager, Logs; gateway S3
+     CloudWatch: logs + dashboard; alarmas opt-in
+     Objetivo pendiente: GuardDuty → EventBridge → SNS; CloudTrail; WAF
 ```
 
-## De donde sale cada pieza
+**[Diagrama de arquitectura objetivo](docs/arquitectura-objetivo.png).**
+Muestra el **objetivo acordado el 23 NOV 2026**: dos subredes públicas,
+cuatro privadas separadas por aplicación/datos, configuración Multi-AZ y notificaciones
+internas mediante consultas mientras la app está en uso.
+Incluye los endpoints Interface y el gateway S3 asociado a las rutas de aplicación.
+La red de seis subredes, endpoints y separación por entorno ya está codificada;
+rotación, permisos específicos y otros controles del objetivo siguen pendientes. El diagrama
+no representa un inventario verificado de recursos activos en AWS.
 
-| En Supabase | En AWS |
+## Estado y evidencia
+
+**23 NOV 2026:** inventario inicial de Ohio en el proyecto `519119252721`: solo VPC y
+subredes predeterminadas en las consultas de red; sin RDS, ALB, ECS, endpoints, NAT,
+instancias EC2, EBS, EIP, ECR o secretos. S3 y DynamoDB sin recursos devueltos;
+CloudFront sin distribuciones devueltas. No es un inventario de todos los servicios/regiones.
+No se creó infraestructura durante esta revisión. Configuración y comandos por entorno:
+[terraform/environments](terraform/environments/README.md).
+
+La bitácora registra un despliegue y login de prueba en octubre de 2026, con 5 academias
+y 30.000 alumnos generados. **No se ha vuelto a verificar esa cuenta en esta revisión.**
+Que el login funcione no demuestra capacidad, alta disponibilidad ni aislamiento completo.
+
+En el código hay tres módulos raíz de Terraform:
+
+| Módulo | Recursos principales |
 |---|---|
-| Postgres | RDS PostgreSQL (`db.t4g.micro`) -- el plan original era Aurora Serverless v2, cambiado por restriccion del free tier |
-| Auth | GoTrue en ECS Fargate |
-| API autogenerada | PostgREST en ECS Fargate |
-| Storage | S3 |
-| Hosting (Vercel) | CloudFront + Lambda / Amplify |
-| Variables de entorno | Secrets Manager |
+| `terraform/bootstrap` | Backend S3 y bloqueo DynamoDB |
+| `terraform/red-y-base` | VPC, subredes, SG, endpoints, RDS y secreto de base |
+| `terraform/supabase-propio` | ECR, ECS Fargate, ALB, CloudFront, S3, secretos, escalado y observabilidad |
 
-## El schema (`db/schema.sql`)
+La revisión añade restricciones de puertos en SG y un dashboard de métricas nativas.
+Las alarmas se crean solo si se configuran umbrales y ventanas explícitos.
+Estos cambios requieren `plan` y despliegue para existir en AWS.
 
-25 tablas extraidas via MCP de la Supabase real, solo estructura (columnas, FKs,
-funciones, RLS), cero datos reales. Alcance decidido a proposito: **Tutor, Alumno y
-Profesor funcionan al 100%**. El Dashboard funciona salvo facturacion SUNAT, gastos y
-cierres de caja. El panel del dueno de la plataforma (suscripciones, modo soporte)
-queda afuera -- es el backoffice de venta del SaaS, no la arquitectura cloud que este
-repo viene a demostrar.
+## Decisiones principales
 
-## Decisiones que vale la pena explicar
+- **GoTrue + PostgREST:** conservar compatibilidad con el cliente Supabase y la autorización
+  RLS. Cognito es una alternativa que exigiría diseñar la integración de claims, no abandonar RLS.
+- **ECS Fargate:** encaja con servidores HTTP persistentes y sus pools de conexiones.
+  No se ha demostrado que Lambda tenga un costo equivalente ni que sea incapaz de soportar la carga.
+- **RDS PostgreSQL:** base privada administrada. Clase, capacidad y conveniencia frente a Aurora
+  se deciden con mediciones y restricciones reales de la cuenta.
+- **Sin NAT:** conectividad limitada a endpoints. Debe revisarse si se incorporan SMTP,
+  proveedores OAuth u otras dependencias externas.
+- **NACL predeterminada:** se conserva. El filtrado específico se realiza con SG; reglas NACL
+  personalizadas quedan pospuestas.
+- **RBAC primero:** roles AWS por responsabilidad y roles de negocio en PostgreSQL. ABAC
+  selectivo es una evolución pendiente, no una capacidad ya implementada por tener etiquetas.
 
-**La autenticacion no se migra a Cognito.** La seguridad multi-tenant vive en politicas
-RLS de Postgres que usan `auth.uid()`. Cambiar a Cognito obliga a reescribirlas todas y
-mueve la autorizacion de la base al codigo de la aplicacion: cualquier consulta que olvide
-filtrar por academia deja de estar protegida. Autohospedar GoTrue mantiene esa red de
-seguridad intacta.
+## Arranque
 
-**Los servicios de auth y API van en Fargate, no en Lambda.** GoTrue y PostgREST son
-servidores HTTP que mantienen un pool de conexiones contra Postgres. Lambda levanta copias
-independientes que abririan cada una las suyas hasta agotar el limite de la base. Se evaluo
-Lambda + RDS Proxy como alternativa "paga solo lo que usas", pero con el trafico real
-esperado (ver mas abajo) el RDS Proxy termina corriendo 24/7 igual, y evitar el "cold start
-storm" del pico de asistencia necesitaria Provisioned Concurrency programada -- que vuelve a
-costar lo mismo que Fargate. Sin ahorro real, mas complejidad.
+Consulta [OPERACION.md](docs/OPERACION.md) antes de aplicar: los backends y la región están
+fijados a la cuenta original y existen pasos SQL e imágenes que Terraform no automatiza.
 
-**Sin NAT Gateway: VPC Endpoints en su lugar.** Un NAT Gateway abre salida a *todo*
-Internet y cobra por hora exista o no trafico. Los servicios en la VPC privada (GoTrue,
-PostgREST) solo necesitan hablar con S3, ECR, Secrets Manager y CloudWatch Logs -- nunca
-con Internet en general. Un VPC Endpoint por cada uno de esos servicios da acceso privado
-y especifico, sin tocar Internet, mas barato y mas seguro que una salida general.
-
-**Un solo Application Load Balancer, no dos.** Un ALB no esta atado a un servicio: alcanza
-uno para los dos backends, evitando pagar un segundo load balancer completo. Acá reparte
-por *puerto* (80 -> PostgREST, 8081 -> GoTrue), no por path, por el motivo de abajo.
-
-**CloudFront reemplaza a Kong.** Supabase usa Kong por dentro para que una sola URL
-reparta entre varios servicios: mira el path (`/auth/v1/...`, `/rest/v1/...`), **le saca el
-prefijo** y lo reenvia. Un ALB sabe repartir por path pero **no sabe reescribirlo**, y el
-cliente oficial de Supabase asume esa estructura de URL. Ademas, el navegador bloquea que
-una pagina HTTPS llame a una API HTTP, y un certificado propio necesita un dominio que no
-tenemos. CloudFront resuelve las dos cosas: da HTTPS gratis con su propio dominio, y con dos
-CloudFront Functions de ocho lineas hace el trabajo completo de Kong (reescribir el path y
-agregar los headers de CORS). **Resultado: las 5 apps Next.js no cambian una sola linea de
-codigo** — solo apuntan a otra URL. Detalle completo en
-[docs/COMO-FUNCIONA.md](docs/COMO-FUNCIONA.md#6-cloudfront-el-reemplazo-de-kong).
-
-## Capacidad objetivo y costos
-
-Disenado pensando en un escenario de trafico real, no solo "que funcione":
-**60 administradores/directores/tutores** conectados de 8am a 8pm, y **30,000 alumnos**
-marcando asistencia por QR en 3 oleadas predecibles (20% a las 7:30am, 30% a las 7:40am,
-50% de 7:45am en adelante), con el mismo pico repitiendose 4 veces al mes en la tarde.
-
-| Escenario | Costo estimado/mes |
-|---|---|
-| Este clon (datos de prueba, sin trafico real) | **$48-60** |
-| Si sirviera de verdad a Academia Premier, con el trafico de arriba | **~$120-170** |
-
-En el segundo escenario, Fargate, el ALB y ahora tambien la base de datos son los que no
-bajan de precio aunque no haya trafico. El plan original era Aurora Serverless v2 (escala
-sola en el pico y baja despues), pero la cuenta de creditos no permite usarla con una VPC
-propia -- con RDS normal se perdio esa elasticidad, asi que la base pasa a ser un gasto
-fijo mas, dimensionado para el peor momento del dia. Ver el reporte completo de costos
-y el detalle de la decision en [CLAUDE.md](CLAUDE.md).
-
-## Como levantarlo
-
-Tres modulos de Terraform, en orden. Cada uno guarda su estado por separado:
-
-```bash
-# 1. El backend remoto: bucket S3 para el estado + tabla DynamoDB para el candado.
-#    Este guarda SU estado en local a proposito (no puede guardarlo en el bucket
-#    que todavia no existe).
-cd terraform/bootstrap && terraform init && terraform apply
-
-# 2. Red y base: VPC, subredes, security groups, VPC Endpoints, RDS, Secrets Manager.
-cd ../red-y-base && terraform init && terraform apply
-
-# 3. El "Supabase propio": ECR, ECS Fargate, ALB, CloudFront, S3, IAM, auto-scaling.
-cd ../supabase-propio && terraform init && terraform apply
+```powershell
+terraform -chdir=terraform/bootstrap init
+terraform -chdir=terraform/bootstrap validate
+terraform -chdir=terraform/bootstrap plan
 ```
 
-Entre el 2 y el 3 hay pasos manuales (cargar el esquema SQL, subir las imagenes a ECR,
-crear los roles de Postgres que Supabase trae de fabrica). El orden exacto, con los
-comandos, esta en [CLAUDE.md](CLAUDE.md#como-se-aplico-en-la-practica-2026-10-1617).
+Después se trabaja en `red-y-base` y finalmente en `supabase-propio`. El nuevo dashboard
+necesita el output `db_instance_id` del estado actualizado de `red-y-base`.
 
-Para destruir todo y no dejar nada cobrando, el orden es al reves (3, 2, 1) con
-`terraform destroy`.
+## Límites antes de llamarlo listo para producción
+
+Acceso directo al ALB y HTTP al origen; CORS y redirects amplios; GoTrue con autoconfirmación;
+imagen `latest`; GoTrue usando credenciales master de base; RDS Single-AZ; una tarea mínima
+por servicio; restauración y carga sin evidencia actual. GuardDuty, CloudTrail, WAF,
+OIDC de CI/CD y trazas todavía no están implementados en Terraform.
+
+Los rangos de costo históricos **no son un presupuesto actualizado**. Ver [COSTOS.md](docs/COSTOS.md).
+
+## Historial
+
+[CLAUDE.md](CLAUDE.md) y [COMO-FUNCIONA.md](docs/COMO-FUNCIONA.md) conservan la bitácora
+y el tutorial original. Para el estado y las decisiones actuales prevalecen los documentos
+enlazados arriba. No se modifican nombres de recursos históricos `aurora_*` porque cambiarlos
+sin migrar el estado puede provocar reemplazos innecesarios.

@@ -1,7 +1,7 @@
 data "aws_region" "actual" {}
 
 resource "aws_ecs_cluster" "principal" {
-  name = "academia-premier"
+  name = local.prefijo
 
   setting {
     name  = "containerInsights"
@@ -12,14 +12,14 @@ resource "aws_ecs_cluster" "principal" {
 }
 
 resource "aws_cloudwatch_log_group" "gotrue" {
-  name              = "/ecs/academia-premier/gotrue"
+  name              = "/ecs/${local.prefijo}/gotrue"
   retention_in_days = 7 # minimo que alcanza para debuggear sin acumular costo
 
   tags = { Name = "academia-premier-logs-gotrue" }
 }
 
 resource "aws_cloudwatch_log_group" "postgrest" {
-  name              = "/ecs/academia-premier/postgrest"
+  name              = "/ecs/${local.prefijo}/postgrest"
   retention_in_days = 7
 
   tags = { Name = "academia-premier-logs-postgrest" }
@@ -32,7 +32,7 @@ resource "aws_cloudwatch_log_group" "postgrest" {
 # =============================================================================
 
 resource "aws_ecs_task_definition" "gotrue" {
-  family                   = "academia-premier-gotrue"
+  family                   = "${local.prefijo}-gotrue"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc" # obligatorio con Fargate -- cada tarea tiene su propia interfaz de red (ENI)
   cpu                      = var.fargate_cpu
@@ -138,7 +138,7 @@ resource "aws_ecs_service" "gotrue" {
 # =============================================================================
 
 resource "aws_ecs_task_definition" "postgrest" {
-  family                   = "academia-premier-postgrest"
+  family                   = "${local.prefijo}-postgrest"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = var.fargate_cpu

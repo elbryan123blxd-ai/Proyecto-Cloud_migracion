@@ -6,7 +6,7 @@
 # =============================================================================
 
 resource "aws_s3_bucket" "archivos" {
-  bucket = "academia-premier-archivos-994b4178" # mismo sufijo random que el bucket de tfstate, por unicidad global
+  bucket = "${local.prefijo}-archivos-${var.expected_account_id}"
 
   tags = { Name = "academia-premier-s3-archivos" }
 }

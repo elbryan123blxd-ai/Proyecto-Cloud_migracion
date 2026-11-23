@@ -14,7 +14,7 @@
 
 # --- El "contenedor" del secreto: solo el nombre y la descripcion -----------
 resource "aws_secretsmanager_secret" "aurora_credentials" {
-  name        = "academia-premier/aurora/credenciales"
+  name        = "academia-premier/${var.environment}/postgres/credenciales"
   description = "Usuario y contrasena del master de la base -- generada por Terraform, nunca a mano"
 
   tags = { Name = "academia-premier-secret-aurora" }

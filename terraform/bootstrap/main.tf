@@ -27,7 +27,8 @@ terraform {
 }
 
 provider "aws" {
-  region = "us-east-2"
+  region              = "us-east-2"
+  allowed_account_ids = [var.expected_account_id]
 
   default_tags {
     tags = {
@@ -44,7 +45,7 @@ resource "random_id" "sufijo" {
 
 # --- Bucket para el tfstate ---
 resource "aws_s3_bucket" "tfstate" {
-  bucket = "academia-premier-tfstate-${random_id.sufijo.hex}"
+  bucket = "academia-premier-tfstate-${var.expected_account_id}-${random_id.sufijo.hex}"
 }
 
 resource "aws_s3_bucket_versioning" "tfstate" {
@@ -74,7 +75,7 @@ resource "aws_s3_bucket_public_access_block" "tfstate" {
 
 # --- Tabla para el lock, evita que dos "terraform apply" se pisen ---
 resource "aws_dynamodb_table" "tflock" {
-  name         = "academia-premier-tflock"
+  name         = "academia-premier-tflock-${var.expected_account_id}"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
 

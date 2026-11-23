@@ -1,5 +1,7 @@
 # =============================================================================
-# VPC con subredes publicas (el ALB) y privadas (GoTrue, PostgREST, Aurora).
+# VPC: dos publicas ALB, dos privadas aplicacion y dos privadas datos.
+# Los IDs Terraform aurora_* se conservan para no alterar el estado.
+# NACL predeterminada: se mantiene; no se crean NACL personalizadas.
 #
 # A proposito SIN NAT Gateway -- ver CLAUDE.md "Presupuesto" para el porque.
 # Lo que las subredes privadas necesitan de AWS (S3, ECR, Secrets Manager,
@@ -13,7 +15,7 @@ resource "aws_vpc" "principal" {
   enable_dns_support   = true         # necesario para que los VPC Endpoints (mas abajo) resuelvan por DNS
   enable_dns_hostnames = true
 
-  tags = { Name = "academia-premier-vpc" }
+  tags = { Name = "${local.prefijo}-vpc" }
 }
 
 # --- Internet Gateway: la unica puerta de la VPC hacia/desde Internet ---------
@@ -21,7 +23,7 @@ resource "aws_vpc" "principal" {
 # no tienen ningun camino hacia este recurso -- por eso no necesitan NAT.
 resource "aws_internet_gateway" "principal" {
   vpc_id = aws_vpc.principal.id
-  tags   = { Name = "academia-premier-igw" }
+  tags   = { Name = "${local.prefijo}-igw" }
 }
 
 # =============================================================================
@@ -37,7 +39,7 @@ resource "aws_subnet" "publica" {
   availability_zone       = data.aws_availability_zones.disponibles.names[count.index]
   map_public_ip_on_launch = true # lo que se cree aca recibe IP publica automatica
 
-  tags = { Name = "academia-premier-publica-${count.index}" }
+  tags = { Name = "${local.prefijo}-publica-${count.index}", tier = "public" }
 }
 
 # Tabla de rutas de las subredes publicas: "todo lo que no sea de la VPC,
@@ -50,7 +52,7 @@ resource "aws_route_table" "publica" {
     gateway_id = aws_internet_gateway.principal.id
   }
 
-  tags = { Name = "academia-premier-rt-publica" }
+  tags = { Name = "${local.prefijo}-rt-publica" }
 }
 
 # Asocia cada subred publica con la tabla de rutas de arriba.
@@ -61,19 +63,19 @@ resource "aws_route_table_association" "publica" {
 }
 
 # =============================================================================
-# SUBREDES PRIVADAS -- GoTrue, PostgREST, Aurora y los VPC Endpoints viven
+# SUBREDES PRIVADAS APLICACION -- GoTrue, PostgREST y VPC Endpoints viven
 # aca. Nada de lo que hay en esta subred es alcanzable directo desde Internet.
 # =============================================================================
 
 resource "aws_subnet" "privada" {
-  count = length(var.subredes_privadas_cidr) # 2, una por AZ (Aurora lo exige)
+  count = length(var.subredes_privadas_cidr) # 2, una por AZ
 
   vpc_id            = aws_vpc.principal.id
   cidr_block        = var.subredes_privadas_cidr[count.index] # 10.0.10.0/24, 10.0.11.0/24
   availability_zone = data.aws_availability_zones.disponibles.names[count.index]
   # Sin "map_public_ip_on_launch": lo que se cree aca NUNCA recibe IP publica.
 
-  tags = { Name = "academia-premier-privada-${count.index}" }
+  tags = { Name = "${local.prefijo}-app-${count.index}", tier = "application" }
 }
 
 # Tabla de rutas de las subredes privadas: a proposito EMPIEZA VACIA, sin
@@ -84,13 +86,35 @@ resource "aws_subnet" "privada" {
 # con un firewall, directamente no existe ningun camino hacia afuera.
 resource "aws_route_table" "privada" {
   vpc_id = aws_vpc.principal.id
-  tags   = { Name = "academia-premier-rt-privada" }
+  tags   = { Name = "${local.prefijo}-rt-app" }
 }
 
 resource "aws_route_table_association" "privada" {
   count          = length(aws_subnet.privada)
   subnet_id      = aws_subnet.privada[count.index].id
   route_table_id = aws_route_table.privada.id
+}
+
+# Datos: tabla propia con solo la ruta local implicita; sin S3 Gateway ni NAT.
+resource "aws_subnet" "datos" {
+  count = length(var.subredes_datos_cidr)
+
+  vpc_id                  = aws_vpc.principal.id
+  cidr_block              = var.subredes_datos_cidr[count.index]
+  availability_zone       = data.aws_availability_zones.disponibles.names[count.index]
+  map_public_ip_on_launch = false
+  tags                    = { Name = "${local.prefijo}-datos-${count.index}", tier = "data" }
+}
+
+resource "aws_route_table" "datos" {
+  vpc_id = aws_vpc.principal.id
+  tags   = { Name = "${local.prefijo}-rt-datos" }
+}
+
+resource "aws_route_table_association" "datos" {
+  count          = length(aws_subnet.datos)
+  subnet_id      = aws_subnet.datos[count.index].id
+  route_table_id = aws_route_table.datos.id
 }
 
 # =============================================================================
@@ -103,8 +127,8 @@ resource "aws_route_table_association" "privada" {
 
 # --- sg-alb: la "puerta de calle". Lo unico que acepta trafico de Internet ---
 resource "aws_security_group" "alb" {
-  name        = "academia-premier-alb"
-  description = "Unico punto que recibe trafico directo de Internet (via CloudFront)"
+  name        = "${local.prefijo}-alb"
+  description = "ALB publico; restringir acceso exclusivo de CloudFront es un pendiente"
   vpc_id      = aws_vpc.principal.id
 
   ingress {
@@ -136,37 +160,64 @@ resource "aws_security_group" "alb" {
   }
 
   egress {
-    description = "Hacia GoTrue/PostgREST (el ALB reparte por path, ver README)"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1" # todo protocolo, todo puerto -- restringido igual porque el destino solo puede ser la VPC
-    cidr_blocks = [var.vpc_cidr]
+    description = "HTTP hacia PostgREST"
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = var.subredes_privadas_cidr
   }
 
-  tags = { Name = "academia-premier-sg-alb" }
+  egress {
+    description = "HTTP hacia GoTrue"
+    from_port   = 9999
+    to_port     = 9999
+    protocol    = "tcp"
+    cidr_blocks = var.subredes_privadas_cidr
+  }
+
+  tags = { Name = "${local.prefijo}-sg-alb" }
 }
 
 # --- sg-servicios: el "portero". Solo deja pasar lo que ya paso por el ALB ---
 # Lo van a usar las tareas de ECS Fargate (GoTrue y PostgREST) en la Fase 2.
 resource "aws_security_group" "servicios" {
-  name        = "academia-premier-servicios"
+  name        = "${local.prefijo}-servicios"
   description = "GoTrue y PostgREST en ECS Fargate -- solo reciben del ALB, nunca directo de Internet"
   vpc_id      = aws_vpc.principal.id
 
   ingress {
-    description     = "Desde el ALB (no desde Internet -- el ALB es el unico que puede hablarles)"
-    from_port       = 0
-    to_port         = 65535
+    description     = "PostgREST solo desde el ALB"
+    from_port       = 3000
+    to_port         = 3000
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id] # referencia a OTRO security group, no a una IP
   }
 
+  ingress {
+    description     = "GoTrue solo desde el ALB"
+    from_port       = 9999
+    to_port         = 9999
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  # CIDR para evitar ciclos entre SG con reglas inline. Los SG receptores
+  # siguen exigiendo sg-servicios como origen. Separar SG por servicio queda
+  # como siguiente paso; no mezclar reglas inline y standalone en este cambio.
   egress {
-    description = "Hacia Aurora (puerto 5432) y hacia los VPC Endpoints (puerto 443)"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = [var.vpc_cidr]
+    description = "PostgreSQL solo en subredes de datos"
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = var.subredes_datos_cidr
+  }
+
+  egress {
+    description = "HTTPS hacia interface endpoints privados"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = var.subredes_privadas_cidr
   }
 
   # Agregado 2026-10-16, causa real encontrada 2026-10-17: GoTrue no podia
@@ -187,12 +238,12 @@ resource "aws_security_group" "servicios" {
     prefix_list_ids = [aws_vpc_endpoint.s3.prefix_list_id]
   }
 
-  tags = { Name = "academia-premier-sg-servicios" }
+  tags = { Name = "${local.prefijo}-sg-servicios" }
 }
 
 # --- sg-aurora: la "caja fuerte". Solo GoTrue/PostgREST le pueden hablar ----
 resource "aws_security_group" "aurora" {
-  name        = "academia-premier-aurora"
+  name        = "${local.prefijo}-postgres"
   description = "Postgres -- ni el ALB le habla directo, solo los servicios"
   vpc_id      = aws_vpc.principal.id
 
@@ -216,13 +267,13 @@ resource "aws_security_group" "aurora" {
     cidr_blocks = []
   }
 
-  tags = { Name = "academia-premier-sg-aurora" }
+  tags = { Name = "${local.prefijo}-sg-db" }
 }
 
 # --- sg-vpc-endpoints: la "ventanilla" de atencion a los servicios de AWS --
 # Los interface endpoints de mas abajo usan este security group.
 resource "aws_security_group" "vpc_endpoints" {
-  name        = "academia-premier-vpc-endpoints"
+  name        = "${local.prefijo}-vpc-endpoints"
   description = "ECR, Secrets Manager, CloudWatch Logs -- solo reciben de los servicios, nunca de afuera"
   vpc_id      = aws_vpc.principal.id
 
@@ -245,7 +296,7 @@ resource "aws_security_group" "vpc_endpoints" {
     cidr_blocks = []
   }
 
-  tags = { Name = "academia-premier-sg-vpc-endpoints" }
+  tags = { Name = "${local.prefijo}-sg-vpc-endpoints" }
 }
 
 # =============================================================================
@@ -263,7 +314,7 @@ resource "aws_vpc_endpoint" "s3" {
   service_name    = "com.amazonaws.us-east-2.s3"
   route_table_ids = [aws_route_table.privada.id] # agrega la ruta a S3 en la tabla privada
 
-  tags = { Name = "academia-premier-vpce-s3" }
+  tags = { Name = "${local.prefijo}-vpce-s3" }
 }
 
 # --- Interface Endpoints: ECR, Secrets Manager, CloudWatch Logs --------------
@@ -292,5 +343,5 @@ resource "aws_vpc_endpoint" "interfaces" {
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true # asi "secretsmanager.us-east-2.amazonaws.com" resuelve a la IP privada, no a Internet
 
-  tags = { Name = "academia-premier-vpce-${each.key}" }
+  tags = { Name = "${local.prefijo}-vpce-${each.key}" }
 }

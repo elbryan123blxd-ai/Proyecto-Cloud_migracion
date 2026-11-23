@@ -24,10 +24,10 @@
 # =============================================================================
 
 resource "aws_db_subnet_group" "aurora" {
-  name       = "academia-premier-aurora"
-  subnet_ids = aws_subnet.privada[*].id
+  name       = "${local.prefijo}-postgres"
+  subnet_ids = aws_subnet.datos[*].id
 
-  tags = { Name = "academia-premier-db-subnets" }
+  tags = { Name = "${local.prefijo}-db-subnets" }
 }
 
 resource "random_password" "aurora_master" {
@@ -36,7 +36,7 @@ resource "random_password" "aurora_master" {
 }
 
 resource "aws_db_instance" "db" {
-  identifier = "academia-premier-db"
+  identifier = "${local.prefijo}-db"
   engine     = "postgres"
   # Confirmada disponible en us-east-2 el 2026-10-15 con:
   #   aws rds describe-db-engine-versions --engine postgres --region us-east-2
@@ -56,7 +56,7 @@ resource "aws_db_instance" "db" {
   db_subnet_group_name   = aws_db_subnet_group.aurora.name
   vpc_security_group_ids = [aws_security_group.aurora.id] # mismo security group ya creado, protege Postgres igual
 
-  multi_az            = false # el free tier solo permite Single-AZ para RDS normal
+  multi_az            = var.db_multi_az
   publicly_accessible = false # nunca accesible directo desde Internet, igual que el diseno original
 
   storage_encrypted       = true
@@ -71,5 +71,5 @@ resource "aws_db_instance" "db" {
   # en medio de una sesion de pruebas no sirve de nada.
   apply_immediately = true
 
-  tags = { Name = "academia-premier-db" }
+  tags = { Name = "${local.prefijo}-db" }
 }

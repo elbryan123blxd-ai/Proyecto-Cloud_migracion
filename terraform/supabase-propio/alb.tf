@@ -4,13 +4,14 @@
 # Sin dominio propio todavia (eso llega en Fase 3 con Amplify/CloudFront),
 # asi que por ahora es HTTP sin certificado. Y sin Kong (el gateway que usa
 # Supabase Cloud para reescribir "/auth/v1/*" y "/rest/v1/*" hacia cada
-# servicio), un ALB comun no puede partir trafico por PATH sin reescritura
-# -- por eso el reparto aca es por PUERTO: 80 = PostgREST, 8081 = GoTrue.
+# servicio), este diseno historico reparte por PUERTO: 80 = PostgREST,
+# 8081 = GoTrue. ALB soporta transformaciones URL actualmente; evaluar
+# compatibilidad del provider y pruebas antes de migrar las reglas.
 # Sigue siendo "un solo ALB", solo que con dos listeners.
 # =============================================================================
 
 resource "aws_lb" "principal" {
-  name               = "academia-premier-alb"
+  name               = "${local.prefijo}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [local.sg_alb_id]
@@ -21,7 +22,7 @@ resource "aws_lb" "principal" {
 
 # --- Target group de PostgREST (la API) -------------------------------------
 resource "aws_lb_target_group" "postgrest" {
-  name        = "academia-premier-tg-postgrest"
+  name        = "ap-${var.environment}-tg-postgrest"
   port        = 3000
   protocol    = "HTTP"
   vpc_id      = local.vpc_id
@@ -51,7 +52,7 @@ resource "aws_lb_listener" "postgrest" {
 
 # --- Target group de GoTrue (auth) ------------------------------------------
 resource "aws_lb_target_group" "gotrue" {
-  name        = "academia-premier-tg-gotrue"
+  name        = "ap-${var.environment}-tg-gotrue"
   port        = 9999
   protocol    = "HTTP"
   vpc_id      = local.vpc_id

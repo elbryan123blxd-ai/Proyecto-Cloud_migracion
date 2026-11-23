@@ -1,5 +1,13 @@
 # Cómo funciona este proyecto
 
+> **Tutorial histórico del primer despliegue.** Para las decisiones y el estado actual
+> consultar [ARQUITECTURA.md](ARQUITECTURA.md), [SEGURIDAD.md](SEGURIDAD.md),
+> [OBSERVABILIDAD.md](OBSERVABILIDAD.md) y [PLAN.md](PLAN.md).
+> Se conserva el recorrido original; sus afirmaciones sobre Cognito/RLS, reescritura ALB,
+> costos y credenciales permanentes requieren las correcciones de esos documentos.
+> No asumir que todas las apps, controles o recursos mencionados están desplegados hoy.
+> El guion actualizado está en [GUION-YOUTUBE.md](GUION-YOUTUBE.md).
+
 Guía completa del clon de Academia Premier sobre AWS: qué se construyó, por qué, y cómo
 funciona cada pieza. Escrita para que se entienda sin saber AWS de antes.
 

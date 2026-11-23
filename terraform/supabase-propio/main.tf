@@ -19,23 +19,19 @@ terraform {
     }
   }
 
-  backend "s3" {
-    bucket         = "academia-premier-tfstate-994b4178"
-    key            = "supabase-propio/terraform.tfstate"
-    region         = "us-east-2"
-    dynamodb_table = "academia-premier-tflock"
-    encrypt        = true
-  }
+  backend "s3" {}
 }
 
 provider "aws" {
-  region = "us-east-2"
+  region              = "us-east-2"
+  allowed_account_ids = [var.expected_account_id]
 
   default_tags {
     tags = {
-      project   = "academia-premier-clon"
-      managedby = "terraform"
-      capa      = "supabase-propio"
+      project     = "academia-premier-clon"
+      managedby   = "terraform"
+      capa        = "supabase-propio"
+      environment = var.environment
     }
   }
 }
@@ -47,9 +43,17 @@ data "terraform_remote_state" "red_y_base" {
   backend = "s3"
 
   config = {
-    bucket = "academia-premier-tfstate-994b4178"
-    key    = "red-y-base/terraform.tfstate"
-    region = "us-east-2"
+    bucket              = var.tfstate_bucket
+    key                 = "${var.environment}/red-y-base/terraform.tfstate"
+    region              = "us-east-2"
+    allowed_account_ids = [var.expected_account_id]
+  }
+
+  lifecycle {
+    postcondition {
+      condition     = self.outputs.environment == var.environment && self.outputs.project_account_id == var.expected_account_id
+      error_message = "El estado de red debe pertenecer al mismo entorno y proyecto AWS."
+    }
   }
 }
 
@@ -62,7 +66,8 @@ data "aws_secretsmanager_secret_version" "aurora_credentials" {
 }
 
 locals {
-  aurora = jsondecode(data.aws_secretsmanager_secret_version.aurora_credentials.secret_string)
+  prefijo = "academia-premier-${var.environment}"
+  aurora  = jsondecode(data.aws_secretsmanager_secret_version.aurora_credentials.secret_string)
 
   vpc_id            = data.terraform_remote_state.red_y_base.outputs.vpc_id
   subredes_publicas = data.terraform_remote_state.red_y_base.outputs.subredes_publicas_ids

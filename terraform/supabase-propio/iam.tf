@@ -7,8 +7,8 @@
 # - "task role": el que tendria tu codigo adentro del contenedor, por si
 #   necesitara llamar a otro servicio de AWS en tiempo de ejecucion. Ninguno
 #   de los dos servicios lo necesita todavia (no hablan con S3 directo) --
-#   se crea igual, vacio, porque ECS lo exige como campo de la task
-#   definition.
+#   se conserva vacio para asignar permisos futuros explicitamente. ECS no
+#   exige task role si el contenedor no necesita llamar APIs de AWS.
 # =============================================================================
 
 data "aws_iam_policy_document" "ecs_tasks_assume" {
@@ -22,7 +22,7 @@ data "aws_iam_policy_document" "ecs_tasks_assume" {
 }
 
 resource "aws_iam_role" "execution" {
-  name               = "academia-premier-ecs-execution"
+  name               = "${local.prefijo}-ecs-execution"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
 }
 
@@ -53,6 +53,6 @@ resource "aws_iam_role_policy" "execution_secrets" {
 }
 
 resource "aws_iam_role" "tarea" {
-  name               = "academia-premier-ecs-tarea"
+  name               = "${local.prefijo}-ecs-tarea"
   assume_role_policy = data.aws_iam_policy_document.ecs_tasks_assume.json
 }

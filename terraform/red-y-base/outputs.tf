@@ -2,6 +2,32 @@ output "vpc_id" {
   value = aws_vpc.principal.id
 }
 
+output "environment" {
+  value = var.environment
+}
+
+output "project_account_id" {
+  value = var.expected_account_id
+}
+
+output "subredes_datos_ids" {
+  description = "Privadas exclusivas de PostgreSQL."
+  value       = aws_subnet.datos[*].id
+}
+
+output "rutas_privadas_ids" {
+  value = { application = aws_route_table.privada.id, data = aws_route_table.datos.id }
+}
+
+output "vpc_endpoints_ids" {
+  value = { interfaces = { for k, ep in aws_vpc_endpoint.interfaces : k => ep.id }, s3 = aws_vpc_endpoint.s3.id }
+}
+
+output "db_instance_id" {
+  description = "Identificador RDS para las dimensiones de CloudWatch"
+  value       = aws_db_instance.db.identifier
+}
+
 output "subredes_publicas_ids" {
   description = "Donde va el ALB en la Fase 2"
   value       = aws_subnet.publica[*].id

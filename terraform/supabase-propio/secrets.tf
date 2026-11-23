@@ -1,9 +1,7 @@
 # =============================================================================
-# Secretos propios de Fase 2 -- el password del master de Aurora (Fase 1) NO
-# se reutiliza aca a proposito: GoTrue y PostgREST no deberian conectarse
-# como super-usuario de la base, cada uno usa su propio rol de Postgres con
-# permisos acotados. Ver db/post-gotrue-roles.sql para la creacion real de
-# esos roles (paso manual, mismo patron que db/post-gotrue-fks.sql).
+# Secretos propios de Fase 2. PostgREST usa authenticator con grants acotados.
+# GoTrue TODAVIA usa el master RDS en gotrue_database_url: pendiente migrarlo
+# a un rol especifico compatible con sus migraciones. Ver docs/SEGURIDAD.md.
 # =============================================================================
 
 # --- El JWT secret: lo que firma y valida los tokens de sesion ---------------
@@ -17,7 +15,7 @@ resource "random_password" "jwt_secret" {
 }
 
 resource "aws_secretsmanager_secret" "jwt_secret" {
-  name        = "academia-premier/servicios/jwt-secret"
+  name        = "academia-premier/${var.environment}/servicios/jwt-secret"
   description = "Firma los JWT que GoTrue emite y que PostgREST valida -- generado por Terraform, nunca a mano"
 
   tags = { Name = "academia-premier-secret-jwt" }
@@ -32,15 +30,15 @@ resource "aws_secretsmanager_secret_version" "jwt_secret" {
 # PostgREST se conecta a Postgres con ESTE rol (no con el master de Aurora),
 # y despues hace "SET ROLE anon/authenticated/service_role" segun lo que diga
 # el JWT de cada pedido. Asi, un bug en PostgREST nunca puede hacer mas de lo
-# que ese rol de bajo privilegio tiene permitido -- el master jamas se expone
-# a trafico de internet, ni indirecto.
+# que sus grants permiten. service_role puede omitir RLS; proteger ese token.
+# GoTrue aun usa el master: no extender a todo el sistema esta garantia.
 resource "random_password" "authenticator" {
   length  = 32
   special = false
 }
 
 resource "aws_secretsmanager_secret" "authenticator" {
-  name        = "academia-premier/postgrest/authenticator"
+  name        = "academia-premier/${var.environment}/postgrest/authenticator"
   description = "Rol de Postgres que usa PostgREST -- se crea a mano con db/post-gotrue-roles.sql"
 
   tags = { Name = "academia-premier-secret-authenticator" }
@@ -60,7 +58,7 @@ resource "aws_secretsmanager_secret_version" "authenticator" {
 # remote state de Fase 1, ver main.tf) y se guardan como secretos propios --
 # asi la tarea de ECS solo pide UN secreto, no 5 variables sueltas.
 resource "aws_secretsmanager_secret" "gotrue_database_url" {
-  name        = "academia-premier/gotrue/database-url"
+  name        = "academia-premier/${var.environment}/gotrue/database-url"
   description = "Connection string completa que usa GoTrue -- usa el master de Aurora, busca en el schema auth"
 
   tags = { Name = "academia-premier-secret-gotrue-db-url" }
@@ -72,7 +70,7 @@ resource "aws_secretsmanager_secret_version" "gotrue_database_url" {
 }
 
 resource "aws_secretsmanager_secret" "postgrest_database_url" {
-  name        = "academia-premier/postgrest/database-url"
+  name        = "academia-premier/${var.environment}/postgrest/database-url"
   description = "Connection string completa que usa PostgREST -- usa el rol authenticator, NUNCA el master"
 
   tags = { Name = "academia-premier-secret-postgrest-db-url" }

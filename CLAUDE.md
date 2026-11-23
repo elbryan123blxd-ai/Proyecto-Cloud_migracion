@@ -1,5 +1,19 @@
 # Proyecto-Cloud_migracion
 
+> **Bitácora histórica; revisión 2026-11-03.** El alcance sigue siendo una réplica con
+> datos generados, preparada con criterios de producción. Para estado y decisiones actuales
+> consultar [README.md](README.md), [PLAN](docs/PLAN.md), [SEGURIDAD](docs/SEGURIDAD.md)
+> y [ARQUITECTURA](docs/ARQUITECTURA.md). Lo anotado como desplegado en octubre no se ha
+> revalidado en AWS en esta revisión. Las secciones siguientes se conservan como historial.
+>
+> **Correcciones:** se posponen NACL personalizadas, se mantiene la predeterminada.
+> Cognito no obliga a abandonar RLS. ALB tiene capacidades actuales de transformación de URL.
+> T4g Unlimited no permite concluir throttling solo por `CPUCreditBalance = 0`.
+> Índices consumen CPU/escrituras y deben medirse. Endpoints Interface se cobran por AZ;
+> el rango USD 48–60 no es una estimación actual validada. IAM user + STS no elimina la
+> existencia de una access key permanente. Las restricciones históricas de cuenta no se
+> generalizan a todas las cuentas. GuardDuty, WAF, CloudTrail y rotación siguen pendientes.
+
 ## Que es esto
 
 Replica sobre AWS de **Academia Premier**, un SaaS multi-tenant real (academias

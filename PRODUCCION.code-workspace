@@ -1,0 +1,30 @@
+{
+  "folders": [
+    { "name": "PRODUCCIÓN · configuración", "path": "terraform/environments/prod" },
+    { "name": "Red y base · compartido", "path": "terraform/red-y-base" },
+    { "name": "Servicios · compartido", "path": "terraform/supabase-propio" },
+    { "name": "Bootstrap · estado compartido", "path": "terraform/bootstrap" },
+    { "name": "Scripts", "path": "scripts" },
+    { "name": "SQL", "path": "db" },
+    { "name": "Documentación", "path": "docs" }
+  ],
+  "settings": {
+    "window.title": "PRODUCCIÓN | Academia Premier | ${activeEditorShort}",
+    "files.exclude": { "**/.terraform": true, "**/__pycache__": true },
+    "search.exclude": { "**/.terraform/**": true, "**/*.tfstate*": true },
+    "workbench.colorCustomizations": { "titleBar.activeBackground": "#752828", "titleBar.activeForeground": "#FFFFFF" }
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "options": { "cwd": "${workspaceFolder:Scripts}/.." },
+    "tasks": [
+      { "label": "PRODUCCIÓN: Validar Terraform", "type": "process", "command": "powershell.exe", "args": ["-NoProfile", "-File", "${workspaceFolder:Scripts}/terraform/Ejecutar-Tarea.ps1", "-Environment", "prod", "-Action", "Validate"], "problemMatcher": [], "group": { "kind": "build", "isDefault": true } },
+      { "label": "PRODUCCIÓN: Comprobar formato", "type": "process", "command": "powershell.exe", "args": ["-NoProfile", "-File", "${workspaceFolder:Scripts}/terraform/Ejecutar-Tarea.ps1", "-Environment", "prod", "-Action", "CheckFormat"], "problemMatcher": [] },
+      { "label": "PRODUCCIÓN: Pruebas locales (mocks)", "type": "process", "command": "powershell.exe", "args": ["-NoProfile", "-File", "${workspaceFolder:Scripts}/terraform/Ejecutar-Tarea.ps1", "-Environment", "prod", "-Action", "Test"], "problemMatcher": [], "group": "test" },
+      { "label": "PRODUCCIÓN: Plan bootstrap (compartido)", "type": "process", "command": "powershell.exe", "args": ["-NoProfile", "-File", "${workspaceFolder:Scripts}/terraform/Ejecutar-Tarea.ps1", "-Environment", "prod", "-Action", "Plan", "-Stack", "bootstrap"], "problemMatcher": [] },
+      { "label": "PRODUCCIÓN: Preparar backend", "type": "process", "command": "powershell.exe", "args": ["-NoProfile", "-File", "${workspaceFolder:Scripts}/terraform/Ejecutar-Tarea.ps1", "-Environment", "prod", "-Action", "PrepareBackend"], "problemMatcher": [] },
+      { "label": "PRODUCCIÓN: Plan red y base", "type": "process", "command": "powershell.exe", "args": ["-NoProfile", "-File", "${workspaceFolder:Scripts}/terraform/Ejecutar-Tarea.ps1", "-Environment", "prod", "-Action", "Plan", "-Stack", "red-y-base"], "problemMatcher": [] },
+      { "label": "PRODUCCIÓN: Plan servicios", "type": "process", "command": "powershell.exe", "args": ["-NoProfile", "-File", "${workspaceFolder:Scripts}/terraform/Ejecutar-Tarea.ps1", "-Environment", "prod", "-Action", "Plan", "-Stack", "supabase-propio"], "problemMatcher": [] }
+    ]
+  }
+}

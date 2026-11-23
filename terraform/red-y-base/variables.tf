@@ -1,3 +1,35 @@
+variable "expected_account_id" {
+  description = "Proyecto AWS permitido; evita desplegar por error en otro proyecto."
+  type        = string
+  default     = "519119252721"
+}
+
+variable "environment" {
+  description = "Entorno independiente; main es la rama de preprod."
+  type        = string
+  default     = "dev"
+  validation {
+    condition     = contains(["dev", "preprod", "prod"], var.environment)
+    error_message = "Usar dev, preprod o prod."
+  }
+}
+
+variable "subredes_datos_cidr" {
+  description = "Dos privadas exclusivas de RDS, sin rutas a Internet ni endpoints."
+  type        = list(string)
+  default     = ["10.0.20.0/24", "10.0.21.0/24"]
+  validation {
+    condition     = length(var.subredes_datos_cidr) == 2
+    error_message = "Se requieren dos subredes de datos, una por AZ."
+  }
+}
+
+variable "db_multi_az" {
+  description = "Standby RDS Multi-AZ; activar solo para la prueba correspondiente."
+  type        = bool
+  default     = false
+}
+
 variable "vpc_cidr" {
   description = "Rango de IPs de toda la VPC"
   type        = string
@@ -8,16 +40,24 @@ variable "subredes_publicas_cidr" {
   description = "Una por AZ. Ahi vive el ALB -- unico lugar con salida/entrada directa a Internet"
   type        = list(string)
   default     = ["10.0.0.0/24", "10.0.1.0/24"]
+  validation {
+    condition     = length(var.subredes_publicas_cidr) == 2
+    error_message = "Se requieren dos subredes publicas."
+  }
 }
 
 variable "subredes_privadas_cidr" {
-  description = "Una por AZ. GoTrue, PostgREST, la base y los VPC Endpoints viven aca -- sin acceso directo desde Internet"
+  description = "Dos privadas de aplicacion: GoTrue, PostgREST y ENI de endpoints; RDS va en datos."
   type        = list(string)
   default     = ["10.0.10.0/24", "10.0.11.0/24"]
+  validation {
+    condition     = length(var.subredes_privadas_cidr) == 2
+    error_message = "Se requieren dos subredes de aplicacion."
+  }
 }
 
 variable "db_instance_class" {
-  description = "Tamano de la instancia RDS. db.t4g.micro se quedo sin creditos de CPU en vivo (2026-10-17, ver rds.tf) -- se intento subir a db.t4g.small, pero la cuenta 'Ready Set Build' lo rechazo con FreeTierRestrictionError: 'This instance size isn't available with free plan accounts'. Tercera restriccion confirmada de este plan (las otras dos: Aurora sin VPC propia, sin SSO). Vuelve a micro, el fix real es agregar indices (gratis) en vez de mas CPU (no permitido)."
+  description = "Clase RDS inicial de laboratorio; disponibilidad y capacidad por validar en el proyecto nuevo."
   type        = string
   default     = "db.t4g.micro"
 }

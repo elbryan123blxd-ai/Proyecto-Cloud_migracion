@@ -1,163 +1,84 @@
-# Plan de migracion
+# Plan y estado de la réplica
 
-## Que es esto
+Actualizado: 2026-11-23. Alcance confirmado: **datos generados, criterios de producción,
+sin migrar clientes ni conectarse a Supabase de producción**.
 
-Academia Premier es un SaaS multi-tenant real: academias preuniversitarias peruanas que
-pagan una cuota mensual. Hoy corre sobre Supabase (base, auth, storage) y Vercel (5 apps
-Next.js).
+## Cómo interpretar el estado
 
-Este proyecto **no migra produccion**. Construye una replica de esa plataforma sobre AWS,
-con datos generados, para demostrar la arquitectura. Produccion sigue en Supabase y Vercel
-y no se toca.
+- **Código:** el recurso o cambio existe en el repositorio.
+- **Histórico:** la bitácora registra una ejecución; necesita revalidación en la cuenta definitiva.
+- **Pendiente:** no hay implementación o evidencia suficiente.
 
-## Decisiones ya tomadas
+Un `terraform validate` no prueba conectividad, capacidad ni que el recurso esté desplegado.
 
-| Decision | Eleccion | Por que |
+## 1. Fundaciones y arquitectura
+
+Avance del 23 NOV: proyecto nuevo `519119252721`, Ohio; inventario inicial sin recursos de
+la réplica en los servicios consultados. Codificadas seis subredes, RDS en datos, endpoints
+en aplicación, nombres/etiquetas y estados por entorno, control del proyecto permitido y
+rechazo de remote state de otro entorno. Pruebas locales con mocks; no desplegado.
+Bootstrap y backends nuevos preparados en [terraform/environments](../terraform/environments/README.md).
+Acceso diario y alertas de gasto se prepararán junto con los servicios, según lo acordado.
+
+| Entregable | Estado | Criterio para cerrar |
 |---|---|---|
-| Alcance | Clon de portfolio | Hay academias pagando; migrar en vivo es riesgo sin beneficio |
-| Auth | Supabase Auth autohospedado (GoTrue) | Las politicas RLS usan `auth.uid()`. Migrar a Cognito obliga a reescribirlas todas y saca la seguridad de la base |
-| Compute de servicios | ECS Fargate | GoTrue y PostgREST mantienen pool de conexiones. En Lambda cada copia abre el suyo y agota la base |
-| Compute de apps | Amplify / Lambda + CloudFront | Serverless real donde si conviene |
-| Base | RDS PostgreSQL normal (`db.t4g.micro`) | El plan original era Aurora Serverless v2, pero el free tier de esta cuenta no permite Aurora con VPC propia (solo "Express Configuration", publica y sin password). Cambiado 2026-10-15, ver CLAUDE.md |
-| Datos | Generados | Son datos de menores de edad. No van a una infra de practica |
-| IaC | Terraform | Todo reproducible y destruible |
+| Bootstrap, red, base, GoTrue y PostgREST | Código + histórico | Plan revisado y endpoints saludables en cuenta definitiva |
+| Seed de 5 academias / 30.000 alumnos | Código + histórico | Recuento e integridad comprobados sin datos reales |
+| Cuenta definitiva, región y presupuesto | Pendiente de confirmar | Documentar restricciones vigentes y alertas recibidas |
+| Diagrama y documentación actualizados | Código | Comparar con plan y recursos tras desplegar |
 
-### Por que no serverless puro
+## 2. Seguridad y acceso
 
-Serverless puro (Lambda + DynamoDB) obligaria a tirar Postgres y reescribir el producto.
-La arquitectura es serverless donde suma y administrada donde hace falta.
+- [x] Acordar mantener NACL predeterminada, sin NACL personalizadas.
+- [x] Restringir en código los puertos ALB → servicios y servicios → red privada.
+- [ ] Aplicar y comprobar login, consultas y pull de imágenes tras el cambio de SG.
+- [ ] Resolver acceso humano: root reservado, MFA y rol diario con sesiones temporales.
+- [ ] Separar lectura, despliegue y administración; evaluar Identity Center en cuenta definitiva.
+- [ ] Restringir origen ALB a la distribución autorizada y añadir TLS al origen.
+- [ ] CORS/redirects con listas explícitas; desactivar registro público si el modelo no lo necesita.
+- [ ] Roles de base específicos para GoTrue; revisar grants y uso de `service_role`.
+- [ ] Roles de ejecución separados por servicio y trust policies acotadas.
+- [ ] GuardDuty con circuito de notificación probado; Runtime Monitoring evaluado con costo.
+- [ ] CloudTrail persistente con destino privado, cifrado y retención definida.
+- [ ] WAF con reglas evaluadas y rate limiting que contemple academias detrás de una misma IP.
+- [ ] Matriz RBAC/RLS positiva y negativa ejecutada entre dos academias.
+- [ ] ABAC selectivo solo donde se confirme soporte y control de cambios de tags.
 
-### Por que no Kubernetes
+Ver [SEGURIDAD.md](SEGURIDAD.md).
 
-Ya existe un proyecto propio con EKS, ArgoCD y Argo Rollouts. Repetirlo no agrega nada.
+## 3. Observabilidad y recuperación
 
-### Cuenta AWS: migrando a una con tarjeta (decidido 2026-10-17)
+- [x] Dashboard en código con ECS, ALB y RDS.
+- [x] Catálogo de alarmas opt-in, sin inventar umbrales de capacidad.
+- [ ] Actualizar output de base y desplegar dashboard.
+- [ ] Medir baseline, elegir umbrales/ventanas y confirmar entrega SNS.
+- [ ] Alertar errores/latencia y ausencia de servicio con métricas apropiadas.
+- [ ] Registrar eventos de despliegue/fallos ECS y consulta sintética de usuario.
+- [ ] Trazas en componentes compatibles; comprobar propagación y muestreo.
+- [ ] Restaurar backup en una base aislada y medir RTO/RPO observados.
 
-La cuenta "Ready Set Build" (free tier) fue bloqueando decisiones de arquitectura, no solo
-presupuesto: Aurora sin VPC propia, sin SSO, y no deja subir el tamano de instancia de RDS
--- esto ultimo se volvio un problema real probando el dashboard: la base se quedo sin
-creditos de CPU bajo carga normal y no hay forma de agrandarla en este plan. Decision: una
-cuenta nueva, con tarjeta real. El Terraform ya escrito (con todos los hallazgos
-incorporados) se vuelve a aplicar ahi, mucho mas rapido que la primera vez. Detalle
-completo en `CLAUDE.md` -> "Migracion a una cuenta con tarjeta".
+Ver [OBSERVABILIDAD.md](OBSERVABILIDAD.md) y [OPERACION.md](OPERACION.md).
 
-## Presupuesto
+## 4. Apps, automatización y carga
 
-Creditos AWS: **$160**, vencen el **2027-04-13**.
+- [ ] Inventariar qué apps y APIs necesitan Storage, Realtime, funciones y correo.
+- [ ] Elegir hosting Next.js según SSR/ISR/middleware y registrar versiones soportadas.
+- [ ] Conectar solo a la réplica y probar los flujos incluidos en el alcance.
+- [ ] CI/CD con OIDC, rol acotado, `fmt`, `validate`, lint y escaneo de IaC.
+- [ ] Fijar imágenes por versión/digest y probar rollback.
+- [ ] Automatizar orden de migraciones SQL y carga de imágenes.
+- [ ] Prueba de carga: 60 operadores y alumnos en oleadas, con ventanas y requests por flujo definidos.
+- [ ] Medir latencia p95/p99, errores, conexiones, CPU y límite de escalado. Guardar resultados.
 
-Los tres que funden la cuenta sin avisar:
+30.000 alumnos registrados no equivalen a 30.000 solicitudes simultáneas. La carga se define
+por operaciones, frecuencia, duración de ventanas y concurrencia, no solo por filas de la base.
 
-| Servicio | Costo | Como lo evitamos |
-|---|---|---|
-| NAT Gateway | ~$32/mes | No se usa. VPC Endpoints o subredes publicas con security groups cerrados |
-| Load Balancer | ~$17/mes | Uno solo para todos los servicios |
-| Base encendida 24/7 | ~$13-43/mes | RDS no escala a 0 (no es Aurora) -- se usa la instancia mas chica posible para compensar |
+## 5. Presentación y cierre
 
-Objetivo: **$48-60/mes** con todo arriba (subio desde $35-50 porque RDS no se puede
-pausar como Aurora Serverless v2), y casi $0 con el entorno apagado salvo por la base.
+- [x] Guion técnico con segmentos condicionados a evidencia real.
+- [ ] Actualizar diagrama con recursos y controles efectivamente desplegados.
+- [ ] Registrar costos medidos y supuestos de estimación.
+- [ ] Grabar demo, aislamiento, incidente controlado y recuperación.
+- [ ] Destruir entorno de práctica y comprobar recursos residuales y cargos.
 
-## Fases
-
-### Fase 0 - Fundaciones (sin costo)
-- [ ] Migrar a una cuenta de AWS con tarjeta real (en curso, 2026-10-17) --
-      ver "Cuenta AWS: migrando a una con tarjeta" arriba. Hasta que esto
-      este listo, el resto de esta lista sigue describiendo la cuenta
-      vieja "Ready Set Build"
-- [x] AWS Budget con alerta a $50 y a $100
-- [x] Acceso a AWS sin claves permanentes en uso (IAM user + MFA + sesion
-      temporal, no SSO -- la cuenta "Ready Set Build" no lo soporta) --
-      el MFA nunca se habia configurado de verdad pese a estar marcado como
-      hecho; corregido y armado de cero 2026-10-16 (ver CLAUDE.md)
-- [x] Confirmar en que cuenta AWS estan los creditos -- cuenta nueva
-      "Ready Set Build", solo region us-east-2 (ver CLAUDE.md)
-- [x] Exportar el esquema SQL de Supabase (solo estructura, sin datos) --
-      `db/schema.sql`. 25 tablas, 21 funciones de permisos, RLS completa.
-      Alcance decidido 2026-10-12: Tutor/Alumno/Profesor al 100%, Dashboard
-      sin facturacion SUNAT/gastos/cierres de caja, panel de plataforma afuera
-- [x] `terraform apply` del bootstrap (`terraform/bootstrap/`) -- bucket
-      `academia-premier-tfstate-994b4178` y tabla `academia-premier-tflock`
-      creados en us-east-2, 2026-10-14
-- [x] Borrar el bucket S3 que se creo a mano por consola durante las pruebas
-      -- confirmado 2026-10-14: no existe ningun otro bucket aparte del
-      del bootstrap. La nota quedo desactualizada, no habia nada que borrar
-- [x] Generador de datos falsos para las 25 tablas de db/schema.sql --
-      `scripts/seed/generar_datos.py`. **Corrido de verdad 2026-10-17**:
-      5 academias, 30.000 alumnos, 100 personal (directores/admin_sede/
-      docentes/tutores), 30.100 usuarios en `auth.users` via GoTrue.
-      Password de prueba para todos: `Demo1234!`
-
-### Fase 1 - Red y base
-- [x] Aplicada 2026-10-15 (`terraform/red-y-base/`): VPC, subredes publicas/privadas,
-      security groups, VPC Endpoints (S3, ECR, Secrets Manager, CloudWatch Logs),
-      RDS PostgreSQL (`academia-premier-db`, Postgres 15.19, `db.t4g.micro` --
-      cambiado desde Aurora Serverless v2 por restriccion del free tier, ver
-      CLAUDE.md), Secrets Manager. Confirmado en consola, us-east-2
-- [x] Cargar `db/schema.sql` contra la base -- hecho 2026-10-16 via CloudShell
-      (VPC environment) con IP privada directa. 25 tablas, 88 policies RLS,
-      57 funciones (21 propias + extensiones) confirmadas en la base real.
-      Hallazgo en el camino: las funciones de permisos usan `auth.uid()`, que
-      no existia hasta crear un stub real en `schema.sql` -- ver CLAUDE.md
-- [ ] Correr `scripts/seed/generar_datos.py` (requiere GoTrue, Fase 2)
-- [ ] Sacar el acceso temporal de CloudShell a la base
-      (`terraform/red-y-base/temporal-acceso-schema.tf`) -- preparado, falta
-      que Bryan corra `terraform apply`
-
-### Fase 2 - El Supabase propio -- COMPLETA 2026-10-17
-- [x] Modulo `terraform/supabase-propio/` -- cluster ECS Fargate, task
-      definitions de GoTrue y PostgREST, ALB con 2 listeners (80 PostgREST,
-      8081 GoTrue -- sin path rewrite, ver CLAUDE.md), ECR, Secrets Manager
-      (JWT + rol authenticator), S3, auto-scaling por CPU. Aplicado, ambos
-      servicios en subred privada (el plan original, sin NAT)
-- [x] Imagenes oficiales de GoTrue (`v2.187.0`, no hay `:latest` en Docker
-      Hub) y PostgREST (`:latest`) subidas a ECR
-- [x] `db/post-gotrue-roles.sql`, `db/gotrue-postgres-role.sql` (rol
-      `postgres` que pide una migracion propia de GoTrue) y
-      `db/post-gotrue-fks.sql` corridos contra la base real
-- [x] GoTrue y PostgREST verificados en vivo atras del ALB: `/health` en
-      GoTrue (puerto 8081) y el esquema OpenAPI completo en PostgREST
-      (puerto 80) responden 200 OK
-
-**Hallazgo central de esta fase** (detalle completo en CLAUDE.md): el
-primer intento de GoTrue para bajar su imagen de ECR fallaba por timeout.
-Se sospecho mal -- DNS privada de los VPC Endpoints -- y se probo hasta
-mover los servicios a subred publica (revertido). La causa real: ECR
-guarda las capas de las imagenes en S3, y el Gateway Endpoint de S3 usa
-IPs publicas como destino (solo cambia el ruteo, nunca el DNS) -- el
-security group de los servicios no dejaba salir hacia esas IPs. Fix de una
-linea (agregar la prefix list de S3 al egress), sin moverse de subred
-privada.
-
-### Fase 3 - Las apps
-- [ ] Desplegar las apps Next.js
-- [ ] Apuntarlas a la nueva URL
-- [ ] Verificar que las politicas RLS siguen aislando por academia
-
-### Fase 4 - CI/CD
-- [ ] GitHub Actions con OIDC, restringido a este repo y a la rama main
-- [ ] `terraform plan` en cada PR
-- [ ] tflint y escaneo de seguridad
-
-### Fase 5 - Cierre
-- [ ] CloudWatch: dashboard y alarmas
-- [ ] **Prueba de carga real — "el clip epico" del video.** Simular el escenario
-      documentado en CLAUDE.md (60 admins + 30k alumnos en 3 oleadas: 20% a las
-      7:30, 30% a las 7:40, 50% de 7:45 en adelante). Grabar el dashboard de
-      CloudWatch mostrando el auto-scaling de Fargate reaccionando en vivo, no
-      solo contarlo. Generar la carga desde dentro de AWS (EC2/Fargate en la
-      misma region), no desde la laptop — si no, el cuello de botella es la
-      laptop, no la arquitectura. Herramienta candidata: k6 (tiene dashboard
-      propio, queda bien en video) o Artillery.
-      **Requiere Fases 1-4 ya desplegadas** — no se puede probar contra algo
-      que no existe. Cuidado con el costo: el auto-scaling real gasta creditos
-      de verdad durante la prueba.
-- [ ] README con diagrama de arquitectura y costos
-- [ ] Video
-- [ ] `terraform destroy` y verificar que no quedo nada cobrando
-
-## Reglas
-
-1. El entorno de AWS **nunca** se conecta a la Supabase de produccion.
-2. Ningun dato real entra a este repo ni a esta infraestructura.
-3. El codigo de las 5 apps Next.js no vive aca: es el producto por el que pagan las academias.
-4. Nada de credenciales permanentes. OIDC para CI, SSO para la laptop.
-5. Teardown al terminar cada sesion larga de trabajo.
+No hay una migración de producción, corte de tráfico real ni copia de datos de clientes.

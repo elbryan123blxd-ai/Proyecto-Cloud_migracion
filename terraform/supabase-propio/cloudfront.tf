@@ -13,16 +13,16 @@
 #    (`@supabase/ssr`) asume UNA sola URL y arma `<url>/auth/v1/...` para
 #    auth y `<url>/rest/v1/...` para la API. En el Supabase real eso lo
 #    reparte Kong, que ADEMAS le saca el prefijo antes de reenviar (GoTrue
-#    espera `/token`, no `/auth/v1/token`). Un ALB comun rutea por path
-#    pero NO reescribe -- por eso en Fase 2 habiamos separado por puerto.
-#    CloudFront si reescribe, con una CloudFront Function de 8 lineas.
+#    espera `/token`, no `/auth/v1/token`). Este diseno historico separa
+#    por puerto y reescribe con Functions. ALB tiene transformaciones URL
+#    actualmente: evaluar compatibilidad del provider antes de refactorizar.
 #
 # Resultado: el codigo de las apps no se toca. Apuntan
 # NEXT_PUBLIC_SUPABASE_URL a la URL de CloudFront y funciona igual que
 # contra el Supabase real.
 #
-# Costo: entra en el free tier perpetuo (1 TB de salida, 10M requests y
-# 2M invocaciones de CloudFront Functions por mes).
+# Costo: verificar precios, plan y beneficios vigentes. Ver docs/COSTOS.md;
+# no asumir que este trafico queda cubierto por un free tier permanente.
 # =============================================================================
 
 # --- Las 2 funciones que hacen de Kong ---------------------------------------
@@ -48,13 +48,11 @@
 #
 # Nota de seguridad, para el video: esto refleja CUALQUIER origen que
 # pida (`Access-Control-Allow-Origin: <el que vino>`) en vez de una lista
-# fija -- la lista fija no alcanza porque hay 5 apps, cada una en su
-# puerto en localhost (orígenes distintos) y despues en su propio dominio
-# de Amplify. Es una simplificacion valida para este clon de portfolio
-# (sin datos ni usuarios reales); en produccion de verdad conviene una
-# lista explicita de dominios permitidos.
+# fija. Una allowlist SI puede cubrir los cinco frontends y localhost;
+# configurarla es un pendiente de hardening, no una limitacion tecnica.
+# CORS no reemplaza autenticacion ni autorizacion de la API.
 resource "aws_cloudfront_function" "quitar_prefijo" {
-  name    = "academia-premier-quitar-prefijo"
+  name    = "${local.prefijo}-quitar-prefijo"
   runtime = "cloudfront-js-2.0"
   comment = "Saca /auth/v1 y /rest/v1 del path, y responde el preflight CORS (OPTIONS) en el borde"
   publish = true
@@ -96,7 +94,7 @@ resource "aws_cloudfront_function" "quitar_prefijo" {
 }
 
 resource "aws_cloudfront_function" "agregar_cors" {
-  name    = "academia-premier-agregar-cors"
+  name    = "${local.prefijo}-agregar-cors"
   runtime = "cloudfront-js-2.0"
   comment = "Le agrega el header de CORS a la respuesta real (login, datos de PostgREST, etc.)"
   publish = true
@@ -143,7 +141,7 @@ resource "aws_cloudfront_distribution" "api" {
     custom_origin_config {
       http_port              = 8081
       https_port             = 443
-      origin_protocol_policy = "http-only" # el ALB no tiene certificado; el tramo CloudFront->ALB va por HTTP dentro de AWS
+      origin_protocol_policy = "http-only" # pendiente HTTPS al origen: estar en AWS no equivale a cifrado en transito
       origin_ssl_protocols   = ["TLSv1.2"]
     }
   }

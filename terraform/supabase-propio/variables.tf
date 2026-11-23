@@ -1,3 +1,28 @@
+variable "expected_account_id" {
+  description = "Proyecto AWS permitido para este despliegue."
+  type        = string
+  default     = "519119252721"
+}
+
+variable "environment" {
+  description = "Entorno independiente; rama main corresponde a preprod."
+  type        = string
+  default     = "dev"
+  validation {
+    condition     = contains(["dev", "preprod", "prod"], var.environment)
+    error_message = "Usar dev, preprod o prod."
+  }
+}
+
+variable "tfstate_bucket" {
+  description = "Bucket del bootstrap NUEVO que contiene el estado de red del entorno."
+  type        = string
+  validation {
+    condition     = var.tfstate_bucket != "academia-premier-tfstate-994b4178" && length(var.tfstate_bucket) > 3
+    error_message = "Indicar el bucket nuevo; el bucket historico no pertenece a este proyecto."
+  }
+}
+
 variable "gotrue_image_tag" {
   description = "Tag de la imagen de GoTrue en ECR (ver ecr.tf). Se sube a mano con docker push -- Terraform no construye imagenes"
   type        = string
